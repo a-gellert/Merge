@@ -1,0 +1,26 @@
+name: "main"
+instances {
+  id: "battle_manager"
+  prototype: "/main/entities/battle_manager/battle_manager.go"
+}
+instances {
+  id: "projectile_manager"
+  prototype: "/main/entities/projectile_manager/projectile_manager.go"
+}
+instances {
+  id: "camera"
+  prototype: "/orthographic/camera.go"
+  position {
+    x: 200.0
+    y: 300.0
+  }
+}
+instances {
+  id: "drag_manager"
+  prototype: "/main/entities/drag_manager/drag_manager.go"
+}
+instances {
+  id: "main_gui"
+  prototype: "/main/gui/main_gui.go"
+}
+scale_along_z: 0

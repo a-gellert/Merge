@@ -1,0 +1,25 @@
+{
+  "bob_arguments" : {
+    "sha1" : "a81dbb0478e8b73931dc2d671563204f6ac0ef82",
+    "version" : "1.14.0",
+    "timestamp" : "2026-10-12 11:39:45"
+  },
+  "defold_sdk" : "a81dbb0478e8b73931dc2d671563204f6ac0ef82",
+  "dependencies" : [ {
+    "url" : "https://github.com/defold/extension-poki-sdk/archive/refs/heads/main.zip",
+    "commit-sha1" : "5ade633bbed5159f8180fbae9f2e542f1241e530",
+    "payload-sha1" : "ffb370f8a939b44c2f681026273b7ad0b73b55b6"
+  }, {
+    "url" : "https://github.com/Insality/druid/archive/master.zip",
+    "commit-sha1" : "3eeb5c7ab701bd99503cc83ff5aa49cbeffbea24",
+    "payload-sha1" : "23cde74eb8d1474c64e7f551b88772208687c89b"
+  }, {
+    "url" : "https://github.com/britzl/defold-orthographic/archive/master.zip",
+    "commit-sha1" : "387370806f7689114ade6d77f98a4341e6b5c062",
+    "payload-sha1" : "96cb51bbc0957995bc89cf87c4eecfd372a1af63"
+  }, {
+    "url" : "https://github.com/Insality/defold-event/archive/refs/tags/14.zip",
+    "commit-sha1" : "3e841089340598d428bacb2acd349afa2d6e6ccf",
+    "payload-sha1" : "654486e5e5b9786a29a7bf79ec37b622639f7803"
+  } ]
+}

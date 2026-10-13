@@ -1,0 +1,9 @@
+-- Projectile visual container
+function init(self)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("set_tint") then
+		go.set("#sprite", "tint", message.tint)
+	end
+end

@@ -1,0 +1,280 @@
+local druid = require("druid.druid")
+local i18n = require("main.modules.i18n")
+local config = require("main.modules.config")
+local economy = require("main.modules.economy")
+local battle_state = require("main.modules.battle_state")
+local tutorial = require("main.modules.tutorial")
+local poki = require("main.modules.poki")
+
+local function format_number(val)
+	val = tonumber(val) or 0
+	local sign = val < 0 and "-" or ""
+	val = math.abs(val)
+
+	if val < 1000 then
+		return sign .. tostring(math.floor(val))
+	end
+
+	local units = {
+		{ 1e12, "T" },
+		{ 1e9, "B" },
+		{ 1e6, "M" },
+		{ 1e3, "K" },
+	}
+
+	for _, unit in ipairs(units) do
+		local threshold = unit[1]
+		local suffix = unit[2]
+		if val >= threshold then
+			local num = val / threshold
+			if num >= 100 then
+				return string.format("%s%d%s", sign, math.floor(num), suffix)
+			elseif num >= 10 then
+				local str = string.format("%.1f", num)
+				str = string.gsub(str, "%.0$", "")
+				return sign .. str .. suffix
+			else
+				local str = string.format("%.2f", num)
+				str = string.gsub(str, "0+$", "")
+				str = string.gsub(str, "%.$", "")
+				return sign .. str .. suffix
+			end
+		end
+	end
+
+	return sign .. tostring(math.floor(val))
+end
+
+local function update_economy_display(coins, cost)
+	gui.set_text(gui.get_node("txt_coins"), format_number(coins))
+	local buy_label = i18n.get("BUY") .. " " .. format_number(cost)
+	gui.set_text(gui.get_node("txt_buy"), buy_label)
+
+	local btn_node = gui.get_node("btn_buy")
+	if coins >= cost and tutorial.is_buy_allowed() then
+		gui.set_color(btn_node, vmath.vector4(0.16, 0.34, 0.65, 1.0))
+	else
+		gui.set_color(btn_node, vmath.vector4(0.25, 0.28, 0.35, 0.8))
+	end
+end
+
+local function update_level_display(lvl)
+	gui.set_text(gui.get_node("txt_level"), i18n.get("LEVEL") .. " " .. tostring(lvl))
+end
+
+local function stop_hand_animation(self)
+	local hand = gui.get_node("hand_pointer")
+	gui.cancel_animations(hand, gui.PROP_POSITION)
+	gui.cancel_animations(hand, gui.PROP_SCALE)
+	gui.set_visible(hand, false)
+end
+
+local function update_tutorial_ui(self, step)
+	local hand = gui.get_node("hand_pointer")
+	local hint = gui.get_node("txt_tutorial_hint")
+	stop_hand_animation(self)
+
+	if step == tutorial.STEP_BUY then
+		gui.set_visible(hand, true)
+		gui.set_position(hand, vmath.vector3(74, 84, 0))
+		gui.animate(hand, "position.y", 70, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		gui.set_text(hint, i18n.get("TUTORIAL_BUY"))
+	elseif step == tutorial.STEP_MERGE then
+		gui.set_visible(hand, true)
+		local p_from = vmath.vector3(120, 250, 0)
+		local p_to = vmath.vector3(180, 250, 0)
+		gui.set_position(hand, p_from)
+		gui.animate(hand, "position", p_to, gui.EASING_INOUTSINE, 0.9, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		gui.set_text(hint, i18n.get("TUTORIAL_MERGE"))
+	elseif step == tutorial.STEP_BATTLE then
+		gui.set_visible(hand, true)
+		gui.set_position(hand, vmath.vector3(212, 86, 0))
+		gui.animate(hand, "position.y", 72, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		gui.set_text(hint, i18n.get("TUTORIAL_BATTLE"))
+	else
+		gui.set_text(hint, "")
+	end
+end
+
+local function hide_popups()
+	local victory_panel = gui.get_node("panel_victory")
+	local defeat_panel = gui.get_node("panel_defeat")
+	gui.set_enabled(victory_panel, false)
+	gui.set_visible(victory_panel, false)
+	gui.set_enabled(defeat_panel, false)
+	gui.set_visible(defeat_panel, false)
+end
+
+local function on_phase_changed(self, phase)
+	local bottom_panel = gui.get_node("panel_bottom")
+	local victory_panel = gui.get_node("panel_victory")
+	local defeat_panel = gui.get_node("panel_defeat")
+
+	if phase == config.PHASE_PREP then
+		gui.set_visible(bottom_panel, true)
+		hide_popups()
+		update_tutorial_ui(self, tutorial.get_step())
+		update_economy_display(economy.get_coins(), economy.get_buy_cost())
+	elseif phase == config.PHASE_BATTLE then
+		-- Bottom buttons hide during battle
+		gui.set_visible(bottom_panel, false)
+		hide_popups()
+		stop_hand_animation(self)
+		gui.set_text(gui.get_node("txt_tutorial_hint"), "")
+	elseif phase == config.PHASE_VICTORY then
+		gui.set_visible(bottom_panel, false)
+		hide_popups()
+		stop_hand_animation(self)
+
+		local earned = economy.get_level_earned()
+		gui.set_text(gui.get_node("txt_victory_reward"), "+" .. format_number(earned) .. " " .. i18n.get("COINS"))
+		gui.set_text(gui.get_node("txt_victory_title"), i18n.get("VICTORY"))
+		gui.set_text(gui.get_node("txt_victory_congrats"), i18n.get("CONGRATS"))
+		gui.set_text(gui.get_node("txt_next"), i18n.get("NEXT"))
+
+		gui.set_enabled(victory_panel, true)
+		gui.set_visible(victory_panel, true)
+		local card = gui.get_node("victory_card")
+		gui.set_scale(card, vmath.vector3(0.3, 0.3, 1.0))
+		gui.animate(card, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBACK, 0.3)
+
+		-- Auto-transition to next level after 2.5 seconds
+		if self.auto_timer then timer.cancel(self.auto_timer) end
+		self.auto_timer = timer.delay(2.5, false, function()
+			if battle_state.get_phase() == config.PHASE_VICTORY then
+				hide_popups()
+				poki.commercial_break(function()
+					battle_state.start_level(battle_state.get_current_level() + 1)
+				end)
+			end
+		end)
+	elseif phase == config.PHASE_DEFEAT then
+		gui.set_visible(bottom_panel, false)
+		hide_popups()
+		stop_hand_animation(self)
+
+		gui.set_text(gui.get_node("txt_defeat_title"), i18n.get("DEFEAT"))
+		gui.set_text(gui.get_node("txt_retry"), i18n.get("RETRY"))
+
+		gui.set_enabled(defeat_panel, true)
+		gui.set_visible(defeat_panel, true)
+		local card = gui.get_node("defeat_card")
+		gui.set_scale(card, vmath.vector3(0.3, 0.3, 1.0))
+		gui.animate(card, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBACK, 0.3)
+	end
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	self.druid = druid.new(self)
+
+	-- Explicitly disable and hide victory/defeat panels on start
+	hide_popups()
+
+	-- Localized static texts
+	gui.set_text(gui.get_node("txt_battle"), i18n.get("BATTLE"))
+
+	-- Button handlers
+	self.btn_buy = self.druid:new_button("btn_buy", function()
+		poki.on_player_input()
+		hide_popups()
+		battle_state.buy_unit()
+	end)
+
+	self.btn_battle = self.druid:new_button("btn_battle", function()
+		poki.on_player_input()
+		hide_popups()
+		battle_state.start_battle()
+	end)
+
+	self.btn_next = self.druid:new_button("btn_next", function()
+		poki.on_player_input()
+		if self.auto_timer then timer.cancel(self.auto_timer) end
+		hide_popups()
+		poki.commercial_break(function()
+			battle_state.start_level(battle_state.get_current_level() + 1)
+		end)
+	end)
+
+	self.btn_retry = self.druid:new_button("btn_retry", function()
+		poki.on_player_input()
+		hide_popups()
+		poki.commercial_break(function()
+			battle_state.start_level(battle_state.get_current_level())
+		end)
+	end)
+
+	-- Subscriptions set dirty flag so GUI mutations run strictly in .gui_script update(dt)
+	self.dirty_ui = true
+	self.last_step = tutorial.get_step()
+	self.last_coins = economy.get_coins()
+	self.last_cost = economy.get_buy_cost()
+	self.last_level = battle_state.get_current_level()
+	self.last_phase = battle_state.get_phase()
+
+	economy.on_change(function()
+		self.dirty_ui = true
+	end)
+
+	battle_state.on_phase_change(function()
+		self.dirty_ui = true
+	end)
+
+	battle_state.on_level_change(function()
+		self.dirty_ui = true
+	end)
+
+	tutorial.on_change(function()
+		self.dirty_ui = true
+	end)
+end
+
+function final(self)
+	msg.post(".", "release_input_focus")
+	if self.auto_timer then timer.cancel(self.auto_timer) end
+	self.druid:final()
+end
+
+function update(self, dt)
+	self.druid:update(dt)
+
+	local cur_step = tutorial.get_step()
+	local cur_coins = economy.get_coins()
+	local cur_cost = economy.get_buy_cost()
+	local cur_level = battle_state.get_current_level()
+	local cur_phase = battle_state.get_phase()
+
+	if self.dirty_ui or cur_level ~= self.last_level then
+		self.last_level = cur_level
+		update_level_display(cur_level)
+	end
+
+	if self.dirty_ui or cur_coins ~= self.last_coins or cur_cost ~= self.last_cost then
+		self.last_coins = cur_coins
+		self.last_cost = cur_cost
+		update_economy_display(cur_coins, cur_cost)
+	end
+
+	if self.dirty_ui or cur_step ~= self.last_step then
+		self.last_step = cur_step
+		update_tutorial_ui(self, cur_step)
+	end
+
+	if self.dirty_ui or cur_phase ~= self.last_phase then
+		self.last_phase = cur_phase
+		on_phase_changed(self, cur_phase)
+	end
+
+	self.dirty_ui = false
+end
+
+function on_message(self, message_id, message, sender)
+	self.druid:on_message(message_id, message, sender)
+end
+
+function on_input(self, action_id, action)
+	if action_id == hash("touch") and action.pressed then
+		poki.on_player_input()
+	end
+	return self.druid:on_input(action_id, action)
+end

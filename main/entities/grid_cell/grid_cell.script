@@ -1,0 +1,25 @@
+local config = require("main.modules.config")
+
+go.property("team", hash("player"))
+
+function init(self)
+	local is_player = (self.team == hash("player"))
+	self.base_bg = is_player and config.COLOR_CELL_PLAYER_BG or config.COLOR_CELL_ENEMY_BG
+	self.base_border = is_player and config.COLOR_CELL_PLAYER_BORDER or config.COLOR_CELL_ENEMY_BORDER
+
+	go.set("#bg", "tint", self.base_bg)
+	go.set("#sprite", "tint", self.base_border)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("highlight") then
+		local tint = message.tint or config.COLOR_CELL_HIGHLIGHT
+		go.set("#sprite", "tint", tint)
+		go.animate("#sprite", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(2.22, 2.22, 1.0), go.EASING_INOUTSINE, 0.28)
+	elseif message_id == hash("reset") then
+		go.cancel_animations("#sprite", "scale")
+		go.set("#sprite", "scale", vmath.vector3(2.15, 2.15, 1.0))
+		go.set("#bg", "tint", self.base_bg)
+		go.set("#sprite", "tint", self.base_border)
+	end
+end

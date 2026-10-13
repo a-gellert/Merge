@@ -1,0 +1,34 @@
+[bootstrap]
+main_collection = /main/main.collectionc
+render = /main/render/game.renderc
+
+[script]
+shared_state = 1
+
+[display]
+width = 300
+height = 600
+high_dpi = 1
+
+[android]
+input_method = HiddenInputField
+
+[html5]
+scale_mode = stretch
+wasm_streaming = 1
+show_fullscreen_button = 0
+show_made_with_defold = 0
+
+[project]
+title = Merge
+dependencies#0 = https://github.com/defold/extension-poki-sdk/archive/refs/heads/main.zip
+dependencies#1 = https://github.com/Insality/druid/archive/master.zip
+dependencies#2 = https://github.com/britzl/defold-orthographic/archive/master.zip
+dependencies#3 = https://github.com/Insality/defold-event/archive/refs/tags/14.zip
+
+[collection]
+max_instances = 8192
+
+[sprite]
+max_count = 12800
+

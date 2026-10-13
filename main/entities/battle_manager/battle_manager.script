@@ -1,0 +1,159 @@
+local config = require("main.modules.config")
+local grid = require("main.modules.grid")
+local battle_state = require("main.modules.battle_state")
+
+local action_queue = {}
+
+local function process_queue()
+	while #action_queue > 0 do
+		local act = table.remove(action_queue, 1)
+		if act.type == "spawn" then
+			local squad_data = act.squad_data
+			if squad_data.go_id and go.exists(squad_data.go_id) then
+				go.delete(squad_data.go_id)
+			end
+			local bunch_id = factory.create("#bunch_factory", squad_data.home_pos)
+			squad_data.go_id = bunch_id
+			msg.post(bunch_id, "setup", {
+				team = squad_data.team,
+				unit_type = squad_data.unit_type,
+				tier = squad_data.tier,
+				unit_count = squad_data.unit_count,
+				pos = squad_data.current_pos,
+				is_merge = squad_data.is_merge,
+			})
+		elseif act.type == "despawn" then
+			local go_id = act.go_id
+			if go_id and go.exists(go_id) then
+				go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.08, 0, function()
+					if go.exists(go_id) then
+						go.delete(go_id)
+					end
+				end)
+			end
+		end
+	end
+end
+
+local function spawn_grid_cells(self)
+	self.cells = {}
+	-- Player 4x4 Grid
+	for r = 1, config.GRID_ROWS do
+		for c = 1, config.GRID_COLS do
+			local pos = grid.get_cell_pos(config.TEAM_PLAYER, r, c)
+			pos.z = -0.1
+			local cell_id = factory.create("#cell_factory", pos, nil, { team = hash("player") })
+			table.insert(self.cells, cell_id)
+		end
+	end
+	-- Enemy 4x4 Grid
+	for r = 1, config.GRID_ROWS do
+		for c = 1, config.GRID_COLS do
+			local pos = grid.get_cell_pos(config.TEAM_ENEMY, r, c)
+			pos.z = -0.1
+			local cell_id = factory.create("#cell_factory", pos, nil, { team = hash("enemy") })
+			table.insert(self.cells, cell_id)
+		end
+	end
+end
+
+function init(self)
+
+	-- Initialize noble dark background and arena floor mats
+	go.set("#board_bg", "tint", config.COLOR_BG)
+	go.set("#enemy_mat_fill", "tint", config.COLOR_FLOOR_ENEMY)
+	go.set("#enemy_mat", "tint", vmath.vector4(0.40, 0.15, 0.20, 0.65))
+	go.set("#player_mat_fill", "tint", config.COLOR_FLOOR_PLAYER)
+	go.set("#player_mat", "tint", vmath.vector4(0.18, 0.28, 0.45, 0.65))
+	go.set("#midline", "tint", vmath.vector4(0.25, 0.35, 0.50, 0.35))
+
+	spawn_grid_cells(self)
+	-- Enable automatic zoom on camera to adapt to different window/screen resolutions
+	msg.post("/camera#script", "set_automatic_zoom", { enabled = true })
+
+	-- Wire battle_state callbacks to Defold game objects via command queue
+	-- (Ensures all go.* and factory.* calls run strictly within a .script context)
+	battle_state.set_view_handlers({
+		spawn_squad = function(squad_data)
+			table.insert(action_queue, { type = "spawn", squad_data = squad_data })
+		end,
+
+		despawn_squad = function(squad_data)
+			local dead_id = squad_data.go_id
+			squad_data.go_id = nil
+			if dead_id then
+				table.insert(action_queue, { type = "despawn", go_id = dead_id })
+			end
+		end,
+
+		update_squad = function(squad_data)
+			if squad_data.go_id then
+				msg.post(squad_data.go_id, "update_visual", {
+					pos = squad_data.current_pos,
+					hp = squad_data.hp,
+					max_hp = squad_data.max_hp,
+					alive_units = squad_data.alive_units,
+				})
+			end
+		end,
+
+		replenish_squad = function(squad_data)
+			if squad_data.go_id then
+				msg.post(squad_data.go_id, "replenish", {
+					pos = squad_data.home_pos,
+					hp = squad_data.hp,
+					max_hp = squad_data.max_hp,
+					alive_units = squad_data.alive_units,
+				})
+			end
+		end,
+
+		snap_squad = function(squad_data)
+			if squad_data.go_id then
+				msg.post(squad_data.go_id, "replenish", {
+					pos = squad_data.home_pos,
+					hp = squad_data.hp,
+					max_hp = squad_data.max_hp,
+					alive_units = squad_data.alive_units,
+				})
+			end
+		end,
+
+		damage_squad = function(squad_data, amount)
+			if squad_data.go_id then
+				msg.post(squad_data.go_id, "hit")
+				msg.post(squad_data.go_id, "update_visual", {
+					pos = squad_data.current_pos,
+					hp = squad_data.hp,
+					max_hp = squad_data.max_hp,
+					alive_units = squad_data.alive_units,
+				})
+			end
+		end,
+
+		attack_squad = function(squad_data, target_data)
+			if squad_data.go_id then
+				msg.post(squad_data.go_id, "attack", { target_pos = target_data.current_pos })
+			end
+		end
+	})
+
+	-- Start initial level (Level 1 Tutorial)
+	battle_state.start_level(1)
+	process_queue()
+end
+
+function final(self)
+	for i = 1, #self.cells do
+		if go.exists(self.cells[i]) then
+			go.delete(self.cells[i])
+		end
+	end
+	self.cells = {}
+end
+
+function update(self, dt)
+	process_queue()
+	battle_state.update_battle(dt)
+	process_queue()
+end

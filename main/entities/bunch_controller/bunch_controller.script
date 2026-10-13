@@ -1,0 +1,381 @@
+local config = require("main.modules.config")
+
+-- Вспомогательная функция для добавления окружности юнитов
+local function add_ring(offsets, ring_count, radius, angle_offset)
+	angle_offset = angle_offset or 0
+	local step = (math.pi * 2) / ring_count
+	for i = 1, ring_count do
+		local angle = (i - 1) * step + angle_offset
+		table.insert(offsets, vmath.vector3(math.cos(angle) * radius, math.sin(angle) * radius, 0.05))
+	end
+end
+
+local function get_formation_offsets(count)
+	local offsets = {}
+
+	if count == 1 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+
+	elseif count == 2 then
+		table.insert(offsets, vmath.vector3(-6.5, 0, 0.05))
+		table.insert(offsets, vmath.vector3(6.5, 0, 0.05))
+
+	elseif count == 3 then
+		table.insert(offsets, vmath.vector3(0, 6, 0.05))
+		table.insert(offsets, vmath.vector3(-6, -4, 0.05))
+		table.insert(offsets, vmath.vector3(6, -4, 0.05))
+
+	elseif count == 5 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 4, 7.5, math.pi * 0.25)
+
+	elseif count == 8 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 7, 9.5)
+
+	elseif count == 13 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 4, 6.0)
+		add_ring(offsets, 8, 11.5, math.pi / 8)
+
+	
+	else-- Идеальная плотная упаковка для ЛЮБОГО числа юнитов (count >= 13)
+		local GOLDEN_ANGLE = 2.39996323
+		local SPREAD_FACTOR = 4.0 -- шаг между телами
+
+		for i = 1, count do
+			local r = SPREAD_FACTOR * math.sqrt(i - 1)
+			local theta = (i - 1) * GOLDEN_ANGLE
+			table.insert(offsets, vmath.vector3(math.cos(theta) * r, math.sin(theta) * r, 0.05))
+		end
+	end
+	return offsets
+end
+
+function init(self)
+	self.warriors = {}
+	self.alive_count = 0
+	self.is_flashing = false
+	self.time = math.random() * 10
+	self.last_pos = vmath.vector3(0, 0, 0)
+	self.is_moving = false
+end
+
+function final(self)
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w and go.exists(w.id) then
+			go.delete(w.id)
+		end
+	end
+	self.warriors = {}
+end
+
+local flash_hit
+
+local function do_flash_hit(self)
+	if self.is_flashing then return end
+	self.is_flashing = true
+	local red = vmath.vector4(1.0, 0.15, 0.15, 1.0)
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w.alive and go.exists(w.id) then
+			msg.post(w.id, "set_tint", { tint = red })
+		end
+	end
+	timer.delay(0.1, false, function()
+		if not self.base_tint then return end
+		for i = 1, #self.warriors do
+			local w = self.warriors[i]
+			if w.alive and go.exists(w.id) then
+				msg.post(w.id, "set_tint", { tint = self.base_tint })
+			end
+		end
+		self.is_flashing = false
+	end)
+end
+flash_hit = do_flash_hit
+
+local function setup_visuals(self, data)
+	local factory_url = (data.unit_type == config.UNIT_ARCHER) and "#archer_factory" or "#melee_factory"
+	local count = data.unit_count or 1
+	local offsets = get_formation_offsets(count)
+
+	-- Clean up existing warriors
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w and go.exists(w.id) then go.delete(w.id) end
+	end
+	self.warriors = {}
+
+	self.team = data.team or config.TEAM_PLAYER
+
+	-- Tint calculation
+	local warrior_tint
+	if self.team == config.TEAM_PLAYER then
+		warrior_tint = (data.unit_type == config.UNIT_ARCHER) and config.COLOR_PLAYER_ARCHER or config.COLOR_PLAYER_MELEE
+	else
+		warrior_tint = (data.unit_type == config.UNIT_ARCHER) and config.COLOR_ENEMY_ARCHER or config.COLOR_ENEMY_MELEE
+	end
+	self.base_tint = warrior_tint
+
+	-- Base ring tint
+	self.tier = data.tier or 1
+	self.ring_tint = config.TIER_RING_COLORS[self.tier] or config.TIER_RING_COLORS[1]
+	go.set("#base_ring", "tint", self.ring_tint)
+
+	-- Tier badge & label
+--	go.set("#tier_badge", "tint", vmath.vector4(0.08, 0.10, 0.16, 0.88))
+	go.set("#tier_label", "text", tostring(self.tier))
+	--msg.post("#tier_badge", "enable")
+	msg.post("#tier_label", "enable")
+	self.combat_hidden_badge = false
+
+	-- Spawn visual warriors with life-like & swarming properties
+	local my_id = go.get_id()
+	local is_enemy = (self.team == config.TEAM_ENEMY)
+	for i = 1, #offsets do
+		local off = offsets[i]
+		local w_id = factory.create(factory_url, off)
+		go.set_parent(w_id, my_id)
+		msg.post(w_id, "set_tint", { tint = warrior_tint, is_enemy = is_enemy })
+
+		-- Vanguard weight: warriors towards forward direction (+Y for player, -Y for enemy)
+		local fwd_offset = (self.team == config.TEAM_PLAYER) and off.y or -off.y
+		local vanguard_weight = math.max(0, (fwd_offset + 6) / 12)
+
+		-- Flank direction: wing warriors spread outward to wrap around
+		local flank_dir = 0
+		if off.x > 2.0 then flank_dir = 1.0
+		elseif off.x < -2.0 then flank_dir = -1.0 end
+
+		table.insert(self.warriors, {
+			id = w_id,
+			base_offset = off,
+			phase = math.random() * math.pi * 2,
+			speed = 2.0 + math.random() * 1.5,
+			alive = true,
+			vanguard_weight = vanguard_weight,
+			flank_dir = flank_dir,
+			chaos_spd_x = 9.0 + math.random() * 6.0,
+			chaos_spd_y = 10.0 + math.random() * 5.0,
+			chaos_amp = 0.9 + math.random() * 0.9
+		})
+	end
+	self.alive_count = #self.warriors
+
+	-- Initial position
+	local pos = data.pos or data.current_pos or data.home_pos
+	if pos then
+		go.set_position(pos)
+		self.last_pos = vmath.vector3(pos)
+	end
+
+	if data.is_merge then
+		-- Squash & stretch merge bounce + flash
+		go.set_scale(vmath.vector3(1.35, 0.65, 1.0))
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTELASTIC, 0.35)
+		flash_hit(self)
+	else
+		-- Pop spawn bounce
+		go.set_scale(vmath.vector3(0.2, 0.2, 1.0))
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.25)
+	end
+end
+
+local function kill_warrior(w)
+	if not w.alive then return end
+	w.alive = false
+	if go.exists(w.id) then
+		local dead_id = w.id
+		-- Pop red and shrink away
+		msg.post(dead_id, "set_tint", { tint = vmath.vector4(1.0, 0.2, 0.2, 1.0) })
+		go.animate(dead_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.18, 0, function()
+			if go.exists(dead_id) and not w.alive then
+				msg.post(dead_id, "disable")
+			end
+		end)
+	end
+end
+
+local function revive_warrior(self, w)
+	if not w or w.alive then return end
+	w.alive = true
+	if go.exists(w.id) then
+		go.cancel_animations(w.id, "scale")
+		msg.post(w.id, "enable")
+		if self.base_tint then
+			msg.post(w.id, "set_tint", { tint = self.base_tint })
+		end
+		go.set_position(w.base_offset, w.id)
+		go.set_rotation(vmath.quat_rotation_z(0), w.id)
+		go.set_scale(vmath.vector3(0.01, 0.01, 1.0), w.id)
+		go.animate(w.id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.25)
+	end
+end
+
+local function replenish_all(self, data)
+	local pos = data and (data.pos or data.current_pos or data.home_pos)
+	if pos then
+		self.last_pos = vmath.vector3(pos)
+		go.cancel_animations(".", "position")
+		go.set_position(pos)
+	end
+	self.is_moving = false
+	go.cancel_animations(".", "scale")
+	go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
+	go.set(".", "position.z", 0.0)
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w then
+			if not w.alive then
+				revive_warrior(self, w)
+			elseif go.exists(w.id) then
+				go.set_rotation(vmath.quat_rotation_z(0), w.id)
+				go.set_position(w.base_offset, w.id)
+			end
+		end
+	end
+	self.alive_count = #self.warriors
+
+	-- Re-enable tier badge & label during preparation phase
+	self.combat_hidden_badge = false
+	--msg.post("#tier_badge", "enable")
+	msg.post("#tier_label", "enable")
+	go.set("#tier_label", "text", tostring(self.tier or 1))
+	go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
+end
+
+local function update_combat_visuals(self, data)
+	local pos = data.pos or data.current_pos
+	if pos then
+		-- Check movement for marching animations
+		local dx = pos.x - self.last_pos.x
+		local dy = pos.y - self.last_pos.y
+		self.is_moving = (dx * dx + dy * dy) > 0.05
+		self.last_pos = vmath.vector3(pos)
+		go.set_position(pos)
+	end
+
+	-- In active battle phase: hide tier number so combat is clean & unobstructed!
+	if self.is_moving and not self.combat_hidden_badge then
+		self.combat_hidden_badge = true
+		--msg.post("#tier_badge", "disable")
+		msg.post("#tier_label", "disable")
+	end
+
+	-- Remove units as HP decreases (visual unit count = HP fraction)
+	local hp = data.hp or 1
+	local max_hp = data.max_hp or 1
+	local target_alive = 0
+	if hp > 0 and max_hp > 0 then
+		target_alive = math.max(1, math.ceil((hp / max_hp) * #self.warriors))
+	end
+
+	if target_alive < self.alive_count then
+		-- Kill the excess warriors with animation
+		for i = #self.warriors, target_alive + 1, -1 do
+			local w = self.warriors[i]
+			if w and w.alive then
+				kill_warrior(w)
+			end
+		end
+		self.alive_count = target_alive
+	elseif target_alive > self.alive_count then
+		-- Revive warriors up to target_alive
+		for i = 1, target_alive do
+			local w = self.warriors[i]
+			if w and not w.alive then
+				revive_warrior(self, w)
+			end
+		end
+		self.alive_count = target_alive
+	end
+end
+
+local function play_attack_lurch(self, target_pos)
+	local my_pos = go.get_position()
+	local dx = target_pos.x - my_pos.x
+	local dy = target_pos.y - my_pos.y
+	local dist = math.sqrt(dx * dx + dy * dy)
+	if dist > 0.1 then
+		local lurch = vmath.vector3(my_pos.x + (dx / dist) * 7, my_pos.y + (dy / dist) * 7, my_pos.z)
+		go.animate(".", "position", go.PLAYBACK_ONCE_PINGPONG, lurch, go.EASING_OUTSINE, 0.12)
+	end
+end
+
+function update(self, dt)
+	self.time = self.time + dt
+
+	local fwd_dir = (self.team == config.TEAM_PLAYER) and 1.0 or -1.0
+
+	-- Animate each individual warrior inside the bunch to make them feel alive and chaotic!
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w.alive and go.exists(w.id) then
+			local b = w.base_offset
+			local ox = b.x
+			local oy = b.y
+
+			if self.is_moving then
+				-- Chaotic swarming motion ("облепляют врага"):
+				-- Vanguard surges forward ahead to engage
+				local surge_fwd = (w.vanguard_weight or 0.5) * 6.5
+				-- Wings flare outward to wrap around the flank
+				local flare_flank = (w.flank_dir or 0) * 5.5
+				-- Organic chaotic noise
+				local chaos_x = math.sin(self.time * (w.chaos_spd_x or 10.0) + w.phase) * (w.chaos_amp or 1.0)
+				local chaos_y = math.cos(self.time * (w.chaos_spd_y or 11.0) + w.phase * 1.3) * (w.chaos_amp or 1.0)
+				-- Marching bounce & running tilt
+				local step_bob = math.abs(math.sin(self.time * 15 + w.phase)) * 2.4
+				local waddle_rot = math.sin(self.time * 15 + w.phase) * 0.16
+
+				ox = ox + flare_flank + chaos_x
+				oy = oy + (surge_fwd * fwd_dir) + step_bob + chaos_y
+				go.set_rotation(vmath.quat_rotation_z(waddle_rot), w.id)
+			else
+				-- Idle breathing and subtle micro-fidgeting at neat home formation
+				local breath_y = math.sin(self.time * w.speed + w.phase) * 0.7
+				local breath_x = math.cos(self.time * (w.speed * 0.8) + w.phase) * 0.4
+				ox = ox + breath_x
+				oy = oy + breath_y
+				go.set_rotation(vmath.quat_rotation_z(0), w.id)
+			end
+
+			go.set_position(vmath.vector3(ox, oy, b.z), w.id)
+		end
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("setup") then
+		setup_visuals(self, message.squad_data or message)
+	elseif message_id == hash("replenish") then
+		replenish_all(self, message.squad_data or message)
+	elseif message_id == hash("update_visual") then
+		update_combat_visuals(self, message.squad_data or message)
+	elseif message_id == hash("hit") then
+		flash_hit(self)
+	elseif message_id == hash("attack") then
+		play_attack_lurch(self, message.target_pos)
+	elseif message_id == hash("drag_state") then
+		if message.dragging then
+			go.cancel_animations(".", "scale")
+			go.set(".", "position.z", 10.0)
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.28, 1.28, 1.0), go.EASING_OUTBACK, 0.12)
+		else
+			go.cancel_animations(".", "scale")
+			go.set(".", "position.z", 0.0)
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.12)
+		end
+	elseif message_id == hash("merge_hint") then
+		if message.active then
+			go.animate(".", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.14, 1.14, 1.0), go.EASING_INOUTSINE, 0.28)
+			go.set("#base_ring", "tint", config.COLOR_CELL_MERGE)
+		else
+			go.cancel_animations(".", "scale")
+			go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
+			go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
+		end
+	end
+end

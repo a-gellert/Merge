@@ -1,0 +1,612 @@
+script: "/main/gui/main.gui_script"
+fonts {
+  name: "druid_text_bold"
+  font: "/druid/fonts/druid_text_bold.font"
+}
+textures {
+  name: "druid"
+  texture: "/druid/druid.atlas"
+}
+nodes {
+  position {
+    x: 58.0
+    y: 566.0
+  }
+  size {
+    x: 96.0
+    y: 36.0
+  }
+  color {
+    x: 0.09
+    y: 0.13
+    z: 0.22
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "coin_container"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    x: -26.0
+  }
+  size {
+    x: 18.0
+    y: 18.0
+  }
+  color {
+    y: 0.82
+    z: 0.15
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "icon_coin"
+  parent: "coin_container"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 12.0
+  }
+  scale {
+    x: 0.6
+    y: 0.6
+  }
+  size {
+    x: 65.0
+    y: 30.0
+  }
+  color {
+    y: 0.88
+    z: 0.25
+  }
+  type: TYPE_TEXT
+  text: "60"
+  font: "druid_text_bold"
+  id: "txt_coins"
+  parent: "coin_container"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 242.0
+    y: 566.0
+  }
+  size {
+    x: 88.0
+    y: 36.0
+  }
+  color {
+    x: 0.09
+    y: 0.13
+    z: 0.22
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "level_container"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  scale {
+    x: 0.52
+    y: 0.52
+  }
+  size {
+    x: 130.0
+    y: 30.0
+  }
+  color {
+    x: 0.9
+    y: 0.93
+    z: 0.98
+  }
+  type: TYPE_TEXT
+  text: "LVL 1"
+  font: "druid_text_bold"
+  id: "txt_level"
+  parent: "level_container"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150.0
+    y: 46.0
+  }
+  size {
+    x: 300.0
+    y: 70.0
+  }
+  type: TYPE_BOX
+  id: "panel_bottom"
+  inherit_alpha: true
+  visible: false
+}
+nodes {
+  position {
+    x: -76.0
+  }
+  size {
+    x: 116.0
+    y: 46.0
+  }
+  color {
+    x: 0.16
+    y: 0.34
+    z: 0.65
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_buy"
+  parent: "panel_bottom"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    x: -42.0
+  }
+  size {
+    x: 14.0
+    y: 14.0
+  }
+  color {
+    x: 0.85
+    y: 0.92
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "icon_buy_unit"
+  parent: "btn_buy"
+  inherit_alpha: true
+  enabled: false
+}
+nodes {
+  position {
+    x: -41.0
+  }
+  size {
+    x: 14.0
+    y: 14.0
+  }
+  color {
+    y: 0.82
+    z: 0.15
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "icon_buy_coin"
+  parent: "btn_buy"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -33.0
+  }
+  scale {
+    x: 0.4
+    y: 0.4
+  }
+  size {
+    x: 150.0
+    y: 50.0
+  }
+  type: TYPE_TEXT
+  text: "\320\232\320\243\320\237\320\230\320\242\320\254 10"
+  font: "druid_text_bold"
+  id: "txt_buy"
+  pivot: PIVOT_W
+  parent: "btn_buy"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 62.0
+  }
+  size {
+    x: 144.0
+    y: 48.0
+  }
+  color {
+    y: 0.42
+    z: 0.08
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_battle"
+  parent: "panel_bottom"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    x: -44.0
+  }
+  size {
+    x: 16.0
+    y: 16.0
+  }
+  type: TYPE_BOX
+  texture: "druid/icon_arrow"
+  id: "icon_battle"
+  parent: "btn_battle"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 8.0
+  }
+  scale {
+    x: 0.58
+    y: 0.58
+  }
+  size {
+    x: 110.0
+    y: 40.0
+  }
+  type: TYPE_TEXT
+  text: "BATTLE"
+  font: "druid_text_bold"
+  id: "txt_battle"
+  parent: "btn_battle"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150.0
+    y: 337.5
+  }
+  size {
+    x: 280.0
+    y: 32.0
+  }
+  type: TYPE_BOX
+  id: "panel_tutorial"
+  inherit_alpha: true
+  visible: false
+}
+nodes {
+  scale {
+    x: 0.46
+    y: 0.46
+  }
+  size {
+    x: 588.0
+    y: 32.0
+  }
+  color {
+    y: 0.95
+    z: 0.4
+  }
+  type: TYPE_TEXT
+  font: "druid_text_bold"
+  id: "txt_tutorial_hint"
+  line_break: true
+  parent: "panel_tutorial"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150.0
+    y: 300.0
+  }
+  size {
+    x: 300.0
+    y: 600.0
+  }
+  type: TYPE_BOX
+  id: "panel_victory"
+  inherit_alpha: true
+  visible: false
+}
+nodes {
+  size {
+    x: 300.0
+    y: 600.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_BOX
+  texture: "druid/pixel"
+  id: "victory_bg"
+  parent: "panel_victory"
+  alpha: 0.65
+}
+nodes {
+  size {
+    x: 250.0
+    y: 220.0
+  }
+  color {
+    x: 0.12
+    y: 0.22
+    z: 0.32
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "victory_card"
+  parent: "panel_victory"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    y: 65.0
+  }
+  scale {
+    x: 0.8
+    y: 0.8
+  }
+  size {
+    x: 240.0
+    y: 40.0
+  }
+  color {
+    x: 0.3
+    y: 0.95
+    z: 0.45
+  }
+  type: TYPE_TEXT
+  text: "VICTORY!"
+  font: "druid_text_bold"
+  id: "txt_victory_title"
+  parent: "victory_card"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: 25.0
+  }
+  scale {
+    x: 0.52
+    y: 0.52
+  }
+  size {
+    x: 240.0
+    y: 30.0
+  }
+  color {
+    x: 0.95
+    y: 0.95
+    z: 0.95
+  }
+  type: TYPE_TEXT
+  text: "EXCELLENT!"
+  font: "druid_text_bold"
+  id: "txt_victory_congrats"
+  parent: "victory_card"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -15.0
+  }
+  scale {
+    x: 0.65
+    y: 0.65
+  }
+  size {
+    x: 240.0
+    y: 35.0
+  }
+  color {
+    y: 0.85
+    z: 0.2
+  }
+  type: TYPE_TEXT
+  text: "+25 COINS"
+  font: "druid_text_bold"
+  id: "txt_victory_reward"
+  parent: "victory_card"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -65.0
+  }
+  size {
+    x: 130.0
+    y: 42.0
+  }
+  color {
+    x: 0.2
+    y: 0.75
+    z: 0.35
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_next"
+  parent: "victory_card"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  scale {
+    x: 0.58
+    y: 0.58
+  }
+  size {
+    x: 120.0
+    y: 30.0
+  }
+  type: TYPE_TEXT
+  text: "NEXT"
+  font: "druid_text_bold"
+  id: "txt_next"
+  parent: "btn_next"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150.0
+    y: 300.0
+  }
+  size {
+    x: 300.0
+    y: 600.0
+  }
+  type: TYPE_BOX
+  id: "panel_defeat"
+  inherit_alpha: true
+  visible: false
+}
+nodes {
+  size {
+    x: 300.0
+    y: 600.0
+  }
+  color {
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  }
+  type: TYPE_BOX
+  texture: "druid/pixel"
+  id: "defeat_bg"
+  parent: "panel_defeat"
+  alpha: 0.65
+}
+nodes {
+  size {
+    x: 250.0
+    y: 190.0
+  }
+  color {
+    x: 0.32
+    y: 0.12
+    z: 0.15
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "defeat_card"
+  parent: "panel_defeat"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    y: 40.0
+  }
+  scale {
+    x: 0.8
+    y: 0.8
+  }
+  size {
+    x: 240.0
+    y: 40.0
+  }
+  color {
+    x: 0.95
+    y: 0.3
+    z: 0.3
+  }
+  type: TYPE_TEXT
+  text: "DEFEAT!"
+  font: "druid_text_bold"
+  id: "txt_defeat_title"
+  parent: "defeat_card"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -35.0
+  }
+  size {
+    x: 130.0
+    y: 42.0
+  }
+  color {
+    x: 0.85
+    y: 0.35
+    z: 0.2
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_retry"
+  parent: "defeat_card"
+  inherit_alpha: true
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  scale {
+    x: 0.58
+    y: 0.58
+  }
+  size {
+    x: 120.0
+    y: 30.0
+  }
+  type: TYPE_TEXT
+  text: "RETRY"
+  font: "druid_text_bold"
+  id: "txt_retry"
+  parent: "btn_retry"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 74.0
+    y: 84.0
+  }
+  rotation {
+    z: -90.0
+  }
+  size {
+    x: 32.0
+    y: 32.0
+  }
+  color {
+    y: 0.85
+    z: 0.25
+  }
+  type: TYPE_BOX
+  texture: "druid/icon_arrow"
+  id: "hand_pointer"
+  inherit_alpha: true
+}
+material: "/builtins/materials/gui.material"
+adjust_reference: ADJUST_REFERENCE_PARENT
