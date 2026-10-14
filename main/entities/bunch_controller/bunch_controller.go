@@ -33,6 +33,24 @@ embedded_components {
   }
 }
 embedded_components {
+  id: "buff_ring"
+  type: "sprite"
+  data: "default_animation: \"ui_circle_32\"\n"
+  "material: \"/builtins/materials/sprite.material\"\n"
+  "textures {\n"
+  "  sampler: \"texture_sampler\"\n"
+  "  texture: \"/druid/druid.atlas\"\n"
+  "}\n"
+  ""
+  position {
+    z: 0.12
+  }
+  scale {
+    x: 1.38
+    y: 1.38
+  }
+}
+embedded_components {
   id: "tier_label"
   type: "label"
   data: "size {\n"

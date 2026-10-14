@@ -4,6 +4,11 @@ end
 
 function on_message(self, message_id, message, sender)
 	if message_id == hash("set_tint") then
-		go.set("#sprite", "tint", message.tint)
+		local tint = message.tint or vmath.vector4(1, 1, 1, 1)
+		go.set("#sprite", "tint", tint)
+		-- Semi-transparent graduating trail ribbon with matching tone
+		go.set("#trail", "tint", vmath.vector4(tint.x, tint.y, tint.z, 0.55))
+		go.set("#trail_mid", "tint", vmath.vector4(tint.x, tint.y, tint.z, 0.35))
+		go.set("#trail_end", "tint", vmath.vector4(tint.x, tint.y, tint.z, 0.15))
 	end
 end

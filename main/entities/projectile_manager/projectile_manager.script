@@ -24,7 +24,7 @@ local function init_pool()
 	end
 end
 
-local function spawn_arrow(from_pos, target_squad, damage, miss_radius)
+local function spawn_arrow(from_pos, target_squad, damage, miss_radius, is_fire)
 	-- Find inactive projectile in pool
 	local arrow = nil
 	for i = 1, #pool do
@@ -68,8 +68,13 @@ local function spawn_arrow(from_pos, target_squad, damage, miss_radius)
 	go.set_rotation(rot, arrow.id)
 	go.set_position(arrow.pos, arrow.id)
 
-	-- Tint based on shooter team
-	local tint = (target_squad.team == config.TEAM_ENEMY) and config.COLOR_PLAYER_ARCHER or config.COLOR_ENEMY_ARCHER
+	-- Tint based on shooter team or fire buff
+	local tint
+	if is_fire then
+		tint = vmath.vector4(1.0, 0.45, 0.05, 1.0)
+	else
+		tint = (target_squad.team == config.TEAM_ENEMY) and config.COLOR_PLAYER_ARROW or config.COLOR_ENEMY_ARROW
+	end
 	msg.post(arrow.id, "set_tint", { tint = tint })
 	msg.post(arrow.id, "enable")
 end
@@ -79,8 +84,10 @@ function init(self)
 
 	-- Register shoot handler directly into battle_state
 	battle_state.set_view_handlers({
-		shoot_projectile = function(shooter_squad, target_squad, damage, miss_radius)
-			spawn_arrow(shooter_squad.current_pos, target_squad, damage, miss_radius)
+		shoot_projectile = function(shooter_squad, target_squad, damage, miss_radius, origin_pos)
+			local start_pt = origin_pos or shooter_squad.current_pos
+			local is_fire = (shooter_squad and shooter_squad.has_fire)
+			spawn_arrow(start_pt, target_squad, damage, miss_radius, is_fire)
 		end
 	})
 end

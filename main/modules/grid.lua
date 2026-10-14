@@ -48,22 +48,56 @@ function M.world_to_player_cell(wx, wy)
 	return nil, nil
 end
 
-function M.get_player_squad(row, col)
+function M.get_player_item(row, col)
 	if player_cells[row] then
 		return player_cells[row][col]
 	end
 	return nil
 end
 
-function M.set_player_squad(row, col, squad)
+function M.set_player_item(row, col, item)
 	if player_cells[row] then
-		player_cells[row][col] = squad
-		if squad then
-			squad.row = row
-			squad.col = col
-			squad.home_pos = M.get_cell_pos(config.TEAM_PLAYER, row, col)
+		player_cells[row][col] = item
+		if item then
+			item.row = row
+			item.col = col
+			item.home_pos = M.get_cell_pos(config.TEAM_PLAYER, row, col)
 		end
 	end
+end
+
+function M.get_player_squad(row, col)
+	if player_cells[row] then
+		local it = player_cells[row][col]
+		if it and not it.is_card and not it.is_crate then
+			return it
+		end
+	end
+	return nil
+end
+
+function M.set_player_squad(row, col, squad)
+	M.set_player_item(row, col, squad)
+end
+
+function M.get_player_card(row, col)
+	if player_cells[row] then
+		local it = player_cells[row][col]
+		if it and it.is_card then
+			return it
+		end
+	end
+	return nil
+end
+
+function M.get_player_crate(row, col)
+	if player_cells[row] then
+		local it = player_cells[row][col]
+		if it and it.is_crate then
+			return it
+		end
+	end
+	return nil
 end
 
 function M.get_enemy_squad(row, col)
@@ -96,6 +130,14 @@ function M.find_first_empty_player_cell()
 	return nil, nil
 end
 
+function M.clear_player_cells()
+	for r = 1, config.GRID_ROWS do
+		for c = 1, config.GRID_COLS do
+			player_cells[r][c] = nil
+		end
+	end
+end
+
 function M.clear_enemy_cells()
 	for r = 1, config.GRID_ROWS do
 		for c = 1, config.GRID_COLS do
@@ -108,8 +150,35 @@ function M.get_all_player_squads()
 	local list = {}
 	for r = 1, config.GRID_ROWS do
 		for c = 1, config.GRID_COLS do
-			if player_cells[r][c] ~= nil then
-				table.insert(list, player_cells[r][c])
+			local it = player_cells[r][c]
+			if it ~= nil and not it.is_card and not it.is_crate then
+				table.insert(list, it)
+			end
+		end
+	end
+	return list
+end
+
+function M.get_all_player_cards()
+	local list = {}
+	for r = 1, config.GRID_ROWS do
+		for c = 1, config.GRID_COLS do
+			local it = player_cells[r][c]
+			if it ~= nil and it.is_card then
+				table.insert(list, it)
+			end
+		end
+	end
+	return list
+end
+
+function M.get_all_player_crates()
+	local list = {}
+	for r = 1, config.GRID_ROWS do
+		for c = 1, config.GRID_COLS do
+			local it = player_cells[r][c]
+			if it ~= nil and it.is_crate then
+				table.insert(list, it)
 			end
 		end
 	end

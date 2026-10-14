@@ -1,0 +1,59 @@
+function init(self)
+	self.home_pos = go.get_position()
+	self.is_cracking = false
+
+	-- Falling from the sky animation with juicy bounce landing
+	local landing_pos = vmath.vector3(self.home_pos)
+	local sky_pos = vmath.vector3(landing_pos.x, landing_pos.y + 360, landing_pos.z)
+	go.set_position(sky_pos)
+
+	go.set_scale(vmath.vector3(0.7, 1.4, 1.0))
+	go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, landing_pos, go.EASING_OUTBOUNCE, 0.52, 0, function()
+		-- Squash and stretch upon hitting the ground
+		go.set_scale(vmath.vector3(1.35, 0.7, 1.0))
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTELASTIC, 0.35)
+	end)
+end
+
+local function setup(self, data)
+	self.home_pos = data.home_pos or go.get_position()
+	self.row = data.row
+	self.col = data.col
+end
+
+local function crack_open(self)
+	if self.is_cracking then return end
+	self.is_cracking = true
+
+	-- Rapid vibration shake & white flash
+	go.cancel_animations(".", "position")
+	go.cancel_animations(".", "scale")
+	go.set("#sprite", "tint", vmath.vector4(2.0, 2.0, 1.8, 1.0))
+
+	-- Quick violent wobble
+	local p = go.get_position()
+	go.set_position(vmath.vector3(p.x - 4, p.y, p.z))
+	go.animate(".", "position.x", go.PLAYBACK_LOOP_PINGPONG, p.x + 4, go.EASING_INOUTSINE, 0.04)
+
+	go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.25, 1.25, 1.0), go.EASING_OUTBACK, 0.16, 0, function()
+		go.cancel_animations(".", "position.x")
+		go.set_position(p)
+		-- Shatter / pop away
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.12, 0, function()
+			go.delete()
+		end)
+	end)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("setup") then
+		setup(self, message)
+	elseif message_id == hash("crack") then
+		crack_open(self)
+	elseif message_id == hash("snap") then
+		local pos = message.pos or self.home_pos
+		self.home_pos = vmath.vector3(pos)
+		go.cancel_animations(".", "position")
+		go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_OUTQUAD, 0.14)
+	end
+end

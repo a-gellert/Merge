@@ -3,6 +3,100 @@ local grid = require("main.modules.grid")
 local battle_state = require("main.modules.battle_state")
 
 local action_queue = {}
+local effect_pool = {}
+local EFFECT_POOL_SIZE = 60
+
+local function init_effects()
+	effect_pool = {}
+	for i = 1, EFFECT_POOL_SIZE do
+		local p_id = factory.create("#effect_factory", vmath.vector3(0, -3000, 0))
+		msg.post(p_id, "disable")
+		table.insert(effect_pool, { id = p_id, in_use = false })
+	end
+end
+
+local function spawn_particle(ptype, pos, params)
+	local fx = nil
+	for i = 1, #effect_pool do
+		if not effect_pool[i].in_use then
+			fx = effect_pool[i]
+			break
+		end
+	end
+	if not fx then return end
+
+	fx.in_use = true
+	local fx_id = fx.id
+	go.set_position(vmath.vector3(pos.x, pos.y, 0.5), fx_id)
+	msg.post(fx_id, "enable")
+	msg.post(fx_id, "play", {
+		type = ptype,
+		tint = params and params.tint,
+		scale = params and params.scale or 1.0,
+		duration = params and params.duration or 0.25,
+		dir = params and params.dir,
+		dist = params and params.dist,
+		rotation = params and params.rotation,
+	})
+end
+
+local function play_merge_effect(pos, extra)
+	local tier = extra and extra.tier or 2
+	local ring_tint = config.TIER_RING_COLORS[tier] or config.TIER_RING_COLORS[1]
+	-- Shockwave ring
+	spawn_particle("merge_ring", pos, {
+		tint = vmath.vector4(ring_tint.x, ring_tint.y, ring_tint.z, 0.95),
+		scale = 1.3,
+		duration = 0.32,
+	})
+	-- Burst of golden and vibrant sparks
+	for i = 1, 14 do
+		local angle = (i / 14) * math.pi * 2 + (math.random() - 0.5) * 0.4
+		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
+		local dist = math.random(25, 65)
+		local tint = (i % 2 == 0) and vmath.vector4(1.0, 0.88, 0.20, 1.0) or ring_tint
+		spawn_particle("spark", pos, {
+			tint = tint,
+			dir = dir,
+			dist = dist,
+			scale = math.random() * 0.6 + 0.4,
+			duration = 0.28 + math.random() * 0.12,
+		})
+	end
+end
+
+local function play_hit_effect(pos, team)
+	local is_enemy = (team == config.TEAM_ENEMY)
+	local hit_color = is_enemy and vmath.vector4(1.0, 0.35, 0.35, 1.0) or vmath.vector4(0.35, 0.75, 1.0, 1.0)
+	-- Sharp sparks
+	for i = 1, 6 do
+		local angle = math.random() * math.pi * 2
+		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
+		local dist = math.random(12, 35)
+		spawn_particle("hit_spark", pos, {
+			tint = (i % 2 == 0) and hit_color or vmath.vector4(1.0, 0.95, 0.6, 1.0),
+			dir = dir,
+			dist = dist,
+			scale = 0.4 + math.random() * 0.3,
+			duration = 0.18 + math.random() * 0.08,
+		})
+	end
+end
+
+local function play_slash_effect(from_pos, target_pos)
+	local dx = target_pos.x - from_pos.x
+	local dy = target_pos.y - from_pos.y
+	local angle = math.atan2(dy, dx) + math.pi * 0.5 + (math.random() - 0.5) * 0.5
+	local offset_x = (math.random() - 0.5) * 14
+	local offset_y = (math.random() - 0.5) * 14
+	local hit_pos = vmath.vector3(target_pos.x + offset_x, target_pos.y + offset_y, 0.5)
+	spawn_particle("slash_slice", hit_pos, {
+		tint = vmath.vector4(1.0, 1.0, 1.0, 0.95),
+		rotation = angle,
+		scale = 0.9 + math.random() * 0.4,
+		duration = 0.12 + math.random() * 0.05,
+	})
+end
 
 local function process_queue()
 	while #action_queue > 0 do
@@ -30,6 +124,59 @@ local function process_queue()
 						go.delete(go_id)
 					end
 				end)
+			end
+		elseif act.type == "spawn_card" then
+			local card_data = act.card_data
+			if card_data.go_id and go.exists(card_data.go_id) then
+				go.delete(card_data.go_id)
+			end
+			local card_id = factory.create("#card_factory", card_data.home_pos)
+			card_data.go_id = card_id
+			msg.post(card_id, "setup", {
+				card_type = card_data.card_type,
+				home_pos = card_data.home_pos,
+				row = card_data.row,
+				col = card_data.col,
+			})
+		elseif act.type == "despawn_card" then
+			local go_id = act.go_id
+			if go_id and go.exists(go_id) then
+				msg.post(go_id, "consume")
+			end
+		elseif act.type == "spawn_crate" then
+			local crate_data = act.crate_data
+			if crate_data.go_id and go.exists(crate_data.go_id) then
+				go.delete(crate_data.go_id)
+			end
+			local crate_id = factory.create("#crate_factory", crate_data.home_pos)
+			crate_data.go_id = crate_id
+			msg.post(crate_id, "setup", {
+				home_pos = crate_data.home_pos,
+				row = crate_data.row,
+				col = crate_data.col,
+			})
+		elseif act.type == "despawn_crate" then
+			local go_id = act.go_id
+			local cb = act.callback
+			if go_id and go.exists(go_id) then
+				msg.post(go_id, "crack")
+				if cb then
+					timer.delay(0.28, false, function()
+						cb()
+					end)
+				end
+			else
+				if cb then
+					cb()
+				end
+			end
+		elseif act.type == "effect" then
+			if act.effect_type == "merge" then
+				play_merge_effect(act.pos, act.extra)
+			elseif act.effect_type == "hit" then
+				play_hit_effect(act.pos, act.team)
+			elseif act.effect_type == "slash" then
+				play_slash_effect(act.from_pos, act.target_pos)
 			end
 		end
 	end
@@ -62,10 +209,10 @@ function init(self)
 	-- Initialize noble dark background and arena floor mats
 	go.set("#board_bg", "tint", config.COLOR_BG)
 	go.set("#enemy_mat_fill", "tint", config.COLOR_FLOOR_ENEMY)
-	go.set("#enemy_mat", "tint", vmath.vector4(0.40, 0.15, 0.20, 0.65))
+	--go.set("#enemy_mat", "tint", vmath.vector4(0.40, 0.15, 0.20, 0.65))
 	go.set("#player_mat_fill", "tint", config.COLOR_FLOOR_PLAYER)
-	go.set("#player_mat", "tint", vmath.vector4(0.18, 0.28, 0.45, 0.65))
-	go.set("#midline", "tint", vmath.vector4(0.25, 0.35, 0.50, 0.35))
+	--go.set("#player_mat", "tint", vmath.vector4(0.18, 0.28, 0.45, 0.65))
+	--go.set("#midline", "tint", vmath.vector4(0.25, 0.35, 0.50, 0.35))
 
 	spawn_grid_cells(self)
 	-- Enable automatic zoom on camera to adapt to different window/screen resolutions
@@ -129,17 +276,69 @@ function init(self)
 					alive_units = squad_data.alive_units,
 				})
 			end
+			table.insert(action_queue, {
+				type = "effect",
+				effect_type = "hit",
+				pos = squad_data.current_pos,
+				team = squad_data.team,
+			})
 		end,
 
 		attack_squad = function(squad_data, target_data)
 			if squad_data.go_id then
 				msg.post(squad_data.go_id, "attack", { target_pos = target_data.current_pos })
 			end
+			table.insert(action_queue, {
+				type = "effect",
+				effect_type = "slash",
+				from_pos = squad_data.current_pos,
+				target_pos = target_data.current_pos,
+			})
+		end,
+
+		play_effect = function(effect_type, pos, extra)
+			table.insert(action_queue, {
+				type = "effect",
+				effect_type = effect_type,
+				pos = pos,
+				extra = extra,
+			})
+		end,
+
+		spawn_card = function(card_data)
+			table.insert(action_queue, { type = "spawn_card", card_data = card_data })
+		end,
+
+		despawn_card = function(card_data)
+			local dead_id = card_data.go_id
+			card_data.go_id = nil
+			if dead_id then
+				table.insert(action_queue, { type = "despawn_card", go_id = dead_id })
+			end
+		end,
+
+		spawn_crate = function(crate_data)
+			table.insert(action_queue, { type = "spawn_crate", crate_data = crate_data })
+		end,
+
+		despawn_crate = function(crate_data, callback)
+			local dead_id = crate_data.go_id
+			crate_data.go_id = nil
+			if dead_id then
+				table.insert(action_queue, { type = "despawn_crate", go_id = dead_id, callback = callback })
+			end
 		end
 	})
 
-	-- Start initial level (Level 1 Tutorial)
-	battle_state.start_level(1)
+	init_effects()
+
+	-- Try loading saved game; if none exists, start initial level (Level 1 Tutorial)
+	local loaded = battle_state.load_game()
+	if not loaded then
+		battle_state.start_level(1)
+	else
+		battle_state.start_level(battle_state.get_current_level())
+	end
 	process_queue()
 end
 
@@ -150,10 +349,29 @@ function final(self)
 		end
 	end
 	self.cells = {}
+	for i = 1, #effect_pool do
+		if go.exists(effect_pool[i].id) then
+			go.delete(effect_pool[i].id)
+		end
+	end
+	effect_pool = {}
 end
 
 function update(self, dt)
 	process_queue()
 	battle_state.update_battle(dt)
 	process_queue()
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("recycle") then
+		for i = 1, #effect_pool do
+			if effect_pool[i].id == sender then
+				effect_pool[i].in_use = false
+				msg.post(sender, "disable")
+				go.set_position(vmath.vector3(0, -3000, 0), sender)
+				break
+			end
+		end
+	end
 end

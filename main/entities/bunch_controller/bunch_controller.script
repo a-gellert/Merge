@@ -1,55 +1,7 @@
 local config = require("main.modules.config")
 
--- Вспомогательная функция для добавления окружности юнитов
-local function add_ring(offsets, ring_count, radius, angle_offset)
-	angle_offset = angle_offset or 0
-	local step = (math.pi * 2) / ring_count
-	for i = 1, ring_count do
-		local angle = (i - 1) * step + angle_offset
-		table.insert(offsets, vmath.vector3(math.cos(angle) * radius, math.sin(angle) * radius, 0.05))
-	end
-end
-
 local function get_formation_offsets(count)
-	local offsets = {}
-
-	if count == 1 then
-		table.insert(offsets, vmath.vector3(0, 0, 0.05))
-
-	elseif count == 2 then
-		table.insert(offsets, vmath.vector3(-6.5, 0, 0.05))
-		table.insert(offsets, vmath.vector3(6.5, 0, 0.05))
-
-	elseif count == 3 then
-		table.insert(offsets, vmath.vector3(0, 6, 0.05))
-		table.insert(offsets, vmath.vector3(-6, -4, 0.05))
-		table.insert(offsets, vmath.vector3(6, -4, 0.05))
-
-	elseif count == 5 then
-		table.insert(offsets, vmath.vector3(0, 0, 0.05))
-		add_ring(offsets, 4, 7.5, math.pi * 0.25)
-
-	elseif count == 8 then
-		table.insert(offsets, vmath.vector3(0, 0, 0.05))
-		add_ring(offsets, 7, 9.5)
-
-	elseif count == 13 then
-		table.insert(offsets, vmath.vector3(0, 0, 0.05))
-		add_ring(offsets, 4, 6.0)
-		add_ring(offsets, 8, 11.5, math.pi / 8)
-
-	
-	else-- Идеальная плотная упаковка для ЛЮБОГО числа юнитов (count >= 13)
-		local GOLDEN_ANGLE = 2.39996323
-		local SPREAD_FACTOR = 4.0 -- шаг между телами
-
-		for i = 1, count do
-			local r = SPREAD_FACTOR * math.sqrt(i - 1)
-			local theta = (i - 1) * GOLDEN_ANGLE
-			table.insert(offsets, vmath.vector3(math.cos(theta) * r, math.sin(theta) * r, 0.05))
-		end
-	end
-	return offsets
+	return config.get_formation_offsets(count)
 end
 
 function init(self)
@@ -59,6 +11,9 @@ function init(self)
 	self.time = math.random() * 10
 	self.last_pos = vmath.vector3(0, 0, 0)
 	self.is_moving = false
+	pcall(function()
+		msg.post("#buff_ring", "disable")
+	end)
 end
 
 function final(self)
@@ -240,10 +195,24 @@ local function replenish_all(self, data)
 
 	-- Re-enable tier badge & label during preparation phase
 	self.combat_hidden_badge = false
-	--msg.post("#tier_badge", "enable")
 	msg.post("#tier_label", "enable")
 	go.set("#tier_label", "text", tostring(self.tier or 1))
 	go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
+
+	pcall(function()
+		if data and (data.has_shield or data.has_fire or data.has_rage) then
+			msg.post("#buff_ring", "enable")
+			if data.has_shield then
+				go.set("#buff_ring", "tint", vmath.vector4(0.2, 0.65, 1.0, 0.75))
+			elseif data.has_fire then
+				go.set("#buff_ring", "tint", vmath.vector4(1.0, 0.5, 0.05, 0.8))
+			elseif data.has_rage then
+				go.set("#buff_ring", "tint", vmath.vector4(1.0, 0.2, 0.35, 0.85))
+			end
+		else
+			msg.post("#buff_ring", "disable")
+		end
+	end)
 end
 
 local function update_combat_visuals(self, data)
@@ -298,9 +267,29 @@ local function play_attack_lurch(self, target_pos)
 	local dx = target_pos.x - my_pos.x
 	local dy = target_pos.y - my_pos.y
 	local dist = math.sqrt(dx * dx + dy * dy)
-	if dist > 0.1 then
-		local lurch = vmath.vector3(my_pos.x + (dx / dist) * 7, my_pos.y + (dy / dist) * 7, my_pos.z)
-		go.animate(".", "position", go.PLAYBACK_ONCE_PINGPONG, lurch, go.EASING_OUTSINE, 0.12)
+	if dist <= 0.1 then return end
+
+	local dir_x = dx / dist
+	local dir_y = dy / dist
+
+	-- Group body forward lunge
+	local lurch = vmath.vector3(my_pos.x + dir_x * 6, my_pos.y + dir_y * 6, my_pos.z)
+	go.animate(".", "position", go.PLAYBACK_ONCE_PINGPONG, lurch, go.EASING_OUTSINE, 0.14)
+
+	-- Every individual living warrior in the bunch vigorously pounds/slashes towards the enemy!
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w.alive and go.exists(w.id) then
+			local b = w.base_offset
+			local stagger_delay = (i % 4) * 0.03
+			local lunge_dist = 5.0 + math.random() * 4.0
+			local warrior_target = vmath.vector3(b.x + dir_x * lunge_dist, b.y + dir_y * lunge_dist, b.z)
+			local strike_rot = (math.random() > 0.5 and 1 or -1) * (0.2 + math.random() * 0.2)
+
+			-- Individual lunge & strike rotation
+			go.animate(w.id, "position", go.PLAYBACK_ONCE_PINGPONG, warrior_target, go.EASING_OUTQUAD, 0.14, stagger_delay)
+			go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_PINGPONG, strike_rot * 57.3, go.EASING_OUTQUAD, 0.14, stagger_delay)
+		end
 	end
 end
 
@@ -377,5 +366,34 @@ function on_message(self, message_id, message, sender)
 			go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
 			go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
 		end
+	elseif message_id == hash("card_hint") then
+		if message.active then
+			go.animate(".", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.15, 1.15, 1.0), go.EASING_INOUTSINE, 0.28)
+			go.set("#base_ring", "tint", message.color or vmath.vector4(1.0, 0.85, 0.2, 1.0))
+		else
+			go.cancel_animations(".", "scale")
+			go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
+			go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
+		end
+	elseif message_id == hash("add_buff") then
+		local btype = message.buff
+		pcall(function()
+			msg.post("#buff_ring", "enable")
+			if btype == "shield" then
+				go.set("#buff_ring", "tint", vmath.vector4(0.2, 0.65, 1.0, 0.75))
+				go.animate("#buff_ring", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.5, 1.5, 1.0), go.EASING_INOUTSINE, 0.9)
+			elseif btype == "fire" then
+				go.set("#buff_ring", "tint", vmath.vector4(1.0, 0.5, 0.05, 0.8))
+				go.animate("#buff_ring", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.45, 1.45, 1.0), go.EASING_INOUTSINE, 0.6)
+			elseif btype == "rage" then
+				go.set("#buff_ring", "tint", vmath.vector4(1.0, 0.2, 0.35, 0.85))
+				go.animate("#buff_ring", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.5, 1.5, 1.0), go.EASING_INOUTSINE, 0.5)
+			end
+		end)
+		flash_hit(self)
+	elseif message_id == hash("remove_buff") then
+		pcall(function()
+			msg.post("#buff_ring", "disable")
+		end)
 	end
 end

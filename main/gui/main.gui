@@ -49,6 +49,7 @@ nodes {
   id: "icon_coin"
   parent: "coin_container"
   inherit_alpha: true
+  alpha: 0.75
 }
 nodes {
   position {
@@ -72,6 +73,7 @@ nodes {
   id: "txt_coins"
   parent: "coin_container"
   inherit_alpha: true
+  alpha: 0.75
 }
 nodes {
   position {
@@ -100,8 +102,8 @@ nodes {
 }
 nodes {
   scale {
-    x: 0.52
-    y: 0.52
+    x: 0.3
+    y: 0.3
   }
   size {
     x: 130.0
@@ -113,11 +115,12 @@ nodes {
     z: 0.98
   }
   type: TYPE_TEXT
-  text: "LVL 1"
+  text: "\320\243\320\240\320\236\320\222\320\225\320\235\320\254 99"
   font: "druid_text_bold"
   id: "txt_level"
   parent: "level_container"
   inherit_alpha: true
+  alpha: 0.75
 }
 nodes {
   position {
@@ -128,29 +131,34 @@ nodes {
     x: 300.0
     y: 70.0
   }
+  color {
+    x: 0.3019608
+    y: 0.4
+    z: 0.8
+  }
   type: TYPE_BOX
   id: "panel_bottom"
   inherit_alpha: true
+  alpha: 0.5
   visible: false
 }
 nodes {
   position {
-    x: -76.0
+    x: -96.0
   }
   size {
-    x: 116.0
-    y: 46.0
+    x: 88.0
+    y: 52.0
   }
   color {
-    x: 0.16
-    y: 0.34
-    z: 0.65
+    x: 0.9019608
+    y: 0.9019608
+    z: 0.3019608
   }
   type: TYPE_BOX
   texture: "druid/rect_round2_width2"
   id: "btn_buy"
   parent: "panel_bottom"
-  inherit_alpha: true
   slice9 {
     x: 4.0
     y: 4.0
@@ -160,7 +168,7 @@ nodes {
 }
 nodes {
   position {
-    x: -42.0
+    x: -32.0
   }
   size {
     x: 14.0
@@ -179,11 +187,11 @@ nodes {
 }
 nodes {
   position {
-    x: -41.0
+    y: 11.0
   }
   size {
-    x: 14.0
-    y: 14.0
+    x: 13.0
+    y: 13.0
   }
   color {
     y: 0.82
@@ -197,41 +205,37 @@ nodes {
 }
 nodes {
   position {
-    x: -33.0
+    y: -10.0
   }
   scale {
-    x: 0.4
-    y: 0.4
+    x: 0.3
+    y: 0.3
   }
   size {
-    x: 150.0
+    x: 130.0
     y: 50.0
   }
   type: TYPE_TEXT
-  text: "\320\232\320\243\320\237\320\230\320\242\320\254 10"
+  text: "\320\232\320\243\320\237\320\230\320\242\320\254 100"
   font: "druid_text_bold"
   id: "txt_buy"
-  pivot: PIVOT_W
   parent: "btn_buy"
   inherit_alpha: true
 }
 nodes {
-  position {
-    x: 62.0
-  }
   size {
-    x: 144.0
-    y: 48.0
+    x: 84.0
+    y: 44.0
   }
   color {
-    y: 0.42
-    z: 0.08
+    x: 0.12
+    y: 0.52
+    z: 0.32
   }
   type: TYPE_BOX
   texture: "druid/rect_round2_width2"
-  id: "btn_battle"
+  id: "btn_reward"
   parent: "panel_bottom"
-  inherit_alpha: true
   slice9 {
     x: 4.0
     y: 4.0
@@ -241,11 +245,72 @@ nodes {
 }
 nodes {
   position {
-    x: -44.0
+    x: -27.0
   }
   size {
-    x: 16.0
-    y: 16.0
+    x: 13.0
+    y: 13.0
+  }
+  color {
+    x: 0.98
+    y: 0.85
+    z: 0.2
+  }
+  type: TYPE_BOX
+  texture: "druid/icon_arrow"
+  id: "icon_reward"
+  parent: "btn_reward"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 7.0
+  }
+  scale {
+    x: 0.42
+    y: 0.42
+  }
+  size {
+    x: 110.0
+    y: 40.0
+  }
+  type: TYPE_TEXT
+  text: "FREE"
+  font: "druid_text_bold"
+  id: "txt_reward"
+  parent: "btn_reward"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 96.0
+  }
+  size {
+    x: 88.0
+    y: 52.0
+  }
+  color {
+    y: 0.42
+    z: 0.08
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_battle"
+  parent: "panel_bottom"
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    y: 11.0
+  }
+  size {
+    x: 14.0
+    y: 14.0
   }
   type: TYPE_BOX
   texture: "druid/icon_arrow"
@@ -255,14 +320,14 @@ nodes {
 }
 nodes {
   position {
-    x: 8.0
+    y: -10.0
   }
   scale {
-    x: 0.58
-    y: 0.58
+    x: 0.48
+    y: 0.48
   }
   size {
-    x: 110.0
+    x: 90.0
     y: 40.0
   }
   type: TYPE_TEXT
@@ -607,6 +672,26 @@ nodes {
   texture: "druid/icon_arrow"
   id: "hand_pointer"
   inherit_alpha: true
+}
+nodes {
+  position {
+    x: -100.0
+    y: -100.0
+  }
+  size {
+    x: 20.0
+    y: 20.0
+  }
+  color {
+    y: 0.82
+    z: 0.15
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "coin_template"
+  inherit_alpha: true
+  enabled: false
+  visible: false
 }
 material: "/builtins/materials/gui.material"
 adjust_reference: ADJUST_REFERENCE_PARENT

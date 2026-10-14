@@ -10,6 +10,18 @@ local current_step = M.STEP_BUY
 local is_completed = false
 local step_callbacks = {}
 
+function M.is_completed()
+	return is_completed
+end
+
+function M.set_completed(completed)
+	is_completed = completed and true or false
+	if is_completed then
+		current_step = M.STEP_DONE
+	end
+	M.notify()
+end
+
 function M.init_for_level(level_num)
 	if level_num == 1 and not is_completed then
 		current_step = M.STEP_BUY

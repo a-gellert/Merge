@@ -19,7 +19,7 @@ M.PLAYER_ROW_Y = { 130, 190, 250, 310 }
 M.ENEMY_ROW_Y = { 365, 425, 485, 545 }
 
 -- Fibonacci sequence for number of visual warriors in a squad per tier
-M.FIBONACCI = { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144 }
+M.FIBONACCI = { 1, 3, 5, 9, 13, 21, 34, 55, 89, 144 }--специально исправил!
 M.MAX_TIER = #M.FIBONACCI
 
 -- Teams
@@ -63,7 +63,7 @@ M.KILL_REWARD = 6
 M.WIN_REWARD = 15
 
 -- Projectile Pool
-M.PROJECTILE_POOL_SIZE = 75
+M.PROJECTILE_POOL_SIZE = 150
 M.PROJECTILE_SPEED = 420
 M.PROJECTILE_HIT_RADIUS = 20
 
@@ -77,8 +77,10 @@ M.COLOR_OUTLINE = vmath.vector4(0.06, 0.08, 0.12, 1.0) -- Deep 2-3px dark cartoo
 
 M.COLOR_PLAYER_MELEE = vmath.vector4(0.20, 0.68, 1.0, 1.0)  -- Vibrant Azure Blue
 M.COLOR_PLAYER_ARCHER = vmath.vector4(0.15, 0.90, 0.55, 1.0) -- Vibrant Mint Emerald
+M.COLOR_PLAYER_ARROW = vmath.vector4(0.15, 0.10, 0.9, 1.0) 
 M.COLOR_ENEMY_MELEE = vmath.vector4(1.0, 0.25, 0.30, 1.0)   -- Candy Red
 M.COLOR_ENEMY_ARCHER = vmath.vector4(1.0, 0.55, 0.15, 1.0)  -- Vibrant Sunset Orange
+M.COLOR_ENEMY_ARROW = vmath.vector4(0.85, 0.10, 0.05, 1.0) 
 
 -- Juicy Candy Tier Ring Colors:
 M.TIER_RING_COLORS = {
@@ -123,6 +125,49 @@ function M.get_squad_stats(unit_type, tier)
 		miss_radius = base.miss_radius or 0,
 		unit_count = count
 	}
+end
+
+local function add_ring(offsets, ring_count, radius, angle_offset)
+	angle_offset = angle_offset or 0
+	local step = (math.pi * 2) / ring_count
+	for i = 1, ring_count do
+		local angle = (i - 1) * step + angle_offset
+		table.insert(offsets, vmath.vector3(math.cos(angle) * radius, math.sin(angle) * radius, 0.05))
+	end
+end
+
+function M.get_formation_offsets(count)
+	local offsets = {}
+
+	if count == 1 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+	elseif count == 2 then
+		table.insert(offsets, vmath.vector3(-6.5, 0, 0.05))
+		table.insert(offsets, vmath.vector3(6.5, 0, 0.05))
+	elseif count == 3 then
+		table.insert(offsets, vmath.vector3(0, 6, 0.05))
+		table.insert(offsets, vmath.vector3(-6, -4, 0.05))
+		table.insert(offsets, vmath.vector3(6, -4, 0.05))
+	elseif count == 5 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 4, 7.5, math.pi * 0.25)
+	elseif count == 8 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 7, 9.5)
+	elseif count == 13 then
+		table.insert(offsets, vmath.vector3(0, 0, 0.05))
+		add_ring(offsets, 4, 6.0)
+		add_ring(offsets, 8, 11.5, math.pi / 8)
+	else
+		local GOLDEN_ANGLE = 2.39996323
+		local SPREAD_FACTOR = 4.0
+		for i = 1, count do
+			local r = SPREAD_FACTOR * math.sqrt(i - 1)
+			local theta = (i - 1) * GOLDEN_ANGLE
+			table.insert(offsets, vmath.vector3(math.cos(theta) * r, math.sin(theta) * r, 0.05))
+		end
+	end
+	return offsets
 end
 
 return M
