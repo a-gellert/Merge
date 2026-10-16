@@ -98,30 +98,89 @@ local function play_slash_effect(from_pos, target_pos)
 	})
 end
 
+local function play_drum_tap_effect(pos)
+	-- Soft subtle ripple
+	spawn_particle("drum_ripple", pos, {
+		tint = vmath.vector4(1.0, 0.85, 0.40, 0.45),
+		scale = 0.9,
+		duration = 0.24,
+	})
+	-- Inner soft flash
+	spawn_particle("drum_ripple", pos, {
+		tint = vmath.vector4(1.0, 1.0, 0.90, 0.50),
+		scale = 0.45,
+		duration = 0.16,
+	})
+	-- Subtle spark burst
+	for i = 1, 4 do
+		local angle = (i / 5) * math.pi * 2 + (math.random() - 0.5) * 0.4
+		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
+		spawn_particle("spark", pos, {
+			tint = vmath.vector4(1.0, 0.55, 0.15, 0.9),
+			dir = dir,
+			dist = math.random(15, 30),
+			scale = 0.45,
+			duration = 0.22,
+		})
+	end
+end
+
+local function play_sell_effect(pos)
+	-- Golden and bright ruby coin burst sparks
+	for i = 1, 10 do
+		local angle = (i / 10) * math.pi * 2 + (math.random() - 0.5) * 0.4
+		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
+		local dist = math.random(16, 42)
+		local tint = (i % 2 == 0) and vmath.vector4(1.0, 0.85, 0.20, 1.0) or vmath.vector4(1.0, 0.35, 0.35, 1.0)
+		spawn_particle("spark", pos, {
+			tint = tint,
+			dir = dir,
+			dist = dist,
+			scale = math.random() * 0.5 + 0.4,
+			duration = 0.25 + math.random() * 0.1,
+		})
+	end
+end
+
 local function process_queue()
 	while #action_queue > 0 do
 		local act = table.remove(action_queue, 1)
 		if act.type == "spawn" then
 			local squad_data = act.squad_data
-			if squad_data.go_id and go.exists(squad_data.go_id) then
-				go.delete(squad_data.go_id)
+			if squad_data.is_alive then
+				if squad_data.go_id and go.exists(squad_data.go_id) then
+					go.delete(squad_data.go_id, true)
+				end
+				local bunch_id = factory.create("#bunch_factory", squad_data.home_pos)
+				squad_data.go_id = bunch_id
+				msg.post(bunch_id, "setup", {
+					team = squad_data.team,
+					unit_type = squad_data.unit_type,
+					tier = squad_data.tier,
+					unit_count = squad_data.unit_count,
+					pos = squad_data.current_pos,
+					is_merge = squad_data.is_merge,
+				})
 			end
-			local bunch_id = factory.create("#bunch_factory", squad_data.home_pos)
-			squad_data.go_id = bunch_id
-			msg.post(bunch_id, "setup", {
-				team = squad_data.team,
-				unit_type = squad_data.unit_type,
-				tier = squad_data.tier,
-				unit_count = squad_data.unit_count,
-				pos = squad_data.current_pos,
-				is_merge = squad_data.is_merge,
-			})
 		elseif act.type == "despawn" then
 			local go_id = act.go_id
 			if go_id and go.exists(go_id) then
 				go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.08, 0, function()
 					if go.exists(go_id) then
-						go.delete(go_id)
+						go.delete(go_id, true)
+					end
+				end)
+			end
+		elseif act.type == "sell_despawn" then
+			local go_id = act.go_id
+			if go_id and go.exists(go_id) then
+				go.cancel_animations(go_id, "position")
+				go.cancel_animations(go_id, "scale")
+				local target_pos = act.pos or vmath.vector3(config.TRASH_BIN_POS)
+				go.animate(go_id, "position", go.PLAYBACK_ONCE_FORWARD, target_pos, go.EASING_INQUAD, 0.14)
+				go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.14, 0, function()
+					if go.exists(go_id) then
+						go.delete(go_id, true)
 					end
 				end)
 			end
@@ -177,6 +236,10 @@ local function process_queue()
 				play_hit_effect(act.pos, act.team)
 			elseif act.effect_type == "slash" then
 				play_slash_effect(act.from_pos, act.target_pos)
+			elseif act.effect_type == "drum_tap" then
+				play_drum_tap_effect(act.pos)
+			elseif act.effect_type == "sell" then
+				play_sell_effect(act.pos)
 			end
 		end
 	end
@@ -240,6 +303,7 @@ function init(self)
 					hp = squad_data.hp,
 					max_hp = squad_data.max_hp,
 					alive_units = squad_data.alive_units,
+					is_drum_raging = (squad_data.team == config.TEAM_PLAYER and battle_state.get_rage_drum_active()),
 				})
 			end
 		end,
@@ -327,7 +391,23 @@ function init(self)
 			if dead_id then
 				table.insert(action_queue, { type = "despawn_crate", go_id = dead_id, callback = callback })
 			end
-		end
+		end,
+
+		sell_squad = function(squad_data, sell_pos)
+			local dead_id = squad_data.go_id
+			squad_data.go_id = nil
+			if dead_id then
+				table.insert(action_queue, { type = "sell_despawn", go_id = dead_id, pos = sell_pos })
+			end
+		end,
+
+		sell_card = function(card_data, sell_pos)
+			local dead_id = card_data.go_id
+			card_data.go_id = nil
+			if dead_id then
+				table.insert(action_queue, { type = "sell_despawn", go_id = dead_id, pos = sell_pos })
+			end
+		end,
 	})
 
 	init_effects()

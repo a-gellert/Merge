@@ -40,24 +40,15 @@ function M.is_active()
 end
 
 function M.is_buy_allowed()
-	if current_step == M.STEP_NONE or current_step == M.STEP_DONE then
-		return true
-	end
-	return current_step == M.STEP_BUY
+	return true
 end
 
 function M.is_merge_allowed()
-	if current_step == M.STEP_NONE or current_step == M.STEP_DONE then
-		return true
-	end
-	return current_step == M.STEP_MERGE
+	return true
 end
 
 function M.is_battle_allowed()
-	if current_step == M.STEP_NONE or current_step == M.STEP_DONE then
-		return true
-	end
-	return current_step == M.STEP_BATTLE
+	return true
 end
 
 function M.advance_from_buy()
@@ -75,11 +66,9 @@ function M.advance_from_merge()
 end
 
 function M.advance_from_battle()
-	if current_step == M.STEP_BATTLE then
-		current_step = M.STEP_DONE
-		is_completed = true
-		M.notify()
-	end
+	current_step = M.STEP_DONE
+	is_completed = true
+	M.notify()
 end
 
 function M.on_change(cb)

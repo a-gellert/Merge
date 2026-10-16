@@ -21,6 +21,9 @@ local next_squad_id = 1
 local next_card_id = 1
 local next_crate_id = 1
 
+local rage_buff_timer = 0
+local RAGE_BUFF_DURATION = 0.55 -- Each tap grants/refreshes rage for 0.55s
+
 local view_handlers = {
 	spawn_squad = nil,
 	despawn_squad = nil,
@@ -37,6 +40,8 @@ local view_handlers = {
 	despawn_card = nil,
 	spawn_crate = nil,
 	despawn_crate = nil,
+	sell_squad = nil,
+	sell_card = nil,
 }
 
 local phase_callbacks = {}
@@ -83,6 +88,24 @@ end
 
 function M.get_crates()
 	return crates_on_field
+end
+
+function M.get_rage_drum_active()
+	return rage_buff_timer > 0
+end
+
+function M.get_rage_drum_timer()
+	return rage_buff_timer
+end
+
+function M.tap_battle_drum(tap_pos)
+	if phase ~= config.PHASE_BATTLE then return false end
+	rage_buff_timer = math.min(1.2, rage_buff_timer + 0.35)
+
+	if view_handlers.play_effect and tap_pos then
+		view_handlers.play_effect("drum_tap", tap_pos)
+	end
+	return true
 end
 
 local function set_phase(new_phase)
@@ -460,6 +483,7 @@ end
 
 function M.start_level(level_num)
 	current_level = level_num or current_level
+	rage_buff_timer = 0
 	set_phase(config.PHASE_PREP)
 
 	-- Clear enemy squads
@@ -550,9 +574,45 @@ function M.start_level(level_num)
 	M.save_game()
 end
 
+local function get_shop_unit_tier(level)
+	local roll = math.random()
+
+	-- Уровни 1-3: быстрый разгон (Т1 и Т2, на 3 ур. появляется Т3)
+	if level == 1 then
+		return 1
+	elseif level == 2 then
+		return (roll < 0.45) and 2 or 1
+	elseif level == 3 then
+		if roll < 0.25 then return 3 end
+		if roll < 0.65 then return 2 end
+		return 1
+	end
+
+	-- С 4 уровня работает скользящее окно из 3 соседних тиров (защита от дедлока 4x4!)
+	-- Ур. 4-7: падают только Т2, Т3, Т4
+	-- Ур. 8-13: падают только Т3, Т4, Т5
+	-- Ур. 14-20: падают только Т4, Т5, Т6
+	-- Ур. 21+: падают только Т5, Т6, Т7 (Т8-Т10 собираются строго вручную!)
+	local min_tier = 2
+	if level >= 21 then
+		min_tier = 5
+	elseif level >= 14 then
+		min_tier = 4
+	elseif level >= 8 then
+		min_tier = 3
+	end
+
+	if roll < 0.12 then
+		return min_tier + 2 -- 12% шанс на старший тир окна
+	elseif roll < 0.45 then
+		return min_tier + 1 -- 33% шанс на средний тир окна
+	else
+		return min_tier     -- 55% шанс на базовый тир окна
+	end
+end
+
 function M.buy_unit()
 	if phase ~= config.PHASE_PREP then return false end
-	if not tutorial.is_buy_allowed() then return false end
 	if not economy.can_afford_buy() then return false end
 
 	local empty_r, empty_c
@@ -587,7 +647,7 @@ function M.buy_unit()
 		tier = 1
 	else
 		unit_type = (math.random() > 0.5) and config.UNIT_MELEE or config.UNIT_ARCHER
-		tier = (math.random() < 0.75) and 1 or 2
+		tier = get_shop_unit_tier(current_level)
 	end
 
 	local squad = create_squad_data(config.TEAM_PLAYER, unit_type, tier, empty_r, empty_c)
@@ -610,7 +670,7 @@ function M.reward_buy_unit()
 	if not empty_r then return false end -- Grid is full!
 
 	local unit_type = (math.random() > 0.5) and config.UNIT_MELEE or config.UNIT_ARCHER
-	local tier = (math.random() < 0.6) and 1 or 2
+	local tier = get_shop_unit_tier(current_level)
 
 	local squad = create_squad_data(config.TEAM_PLAYER, unit_type, tier, empty_r, empty_c)
 	table.insert(player_squads, squad)
@@ -648,7 +708,7 @@ function M.merge_units(from_r, from_c, to_r, to_c)
 			view_handlers.update_squad(squad_b)
 		end
 		M.save_game()
-		return false
+		return true
 	end
 
 	-- Same type and tier: MERGE!
@@ -692,6 +752,66 @@ function M.merge_units(from_r, from_c, to_r, to_c)
 	return true
 end
 
+function M.can_auto_merge()
+	if phase ~= config.PHASE_PREP then return false end
+	for i = 1, #player_squads do
+		local s1 = player_squads[i]
+		if s1.is_alive and s1.tier < config.MAX_TIER then
+			for j = i + 1, #player_squads do
+				local s2 = player_squads[j]
+				if s2.is_alive and s2.tier == s1.tier and s2.unit_type == s1.unit_type then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+function M.auto_merge()
+	if phase ~= config.PHASE_PREP then return false end
+
+	local merged_any = false
+
+	-- Up to 16 merge iterations to merge all available pairs (including cascades)
+	for _ = 1, 16 do
+		local found = false
+
+		-- Scan from lowest tier to highest tier
+		for tier = 1, config.MAX_TIER - 1 do
+			local squad_a, squad_b = nil, nil
+
+			for i = 1, #player_squads do
+				local s1 = player_squads[i]
+				if s1.is_alive and s1.tier == tier then
+					for j = i + 1, #player_squads do
+						local s2 = player_squads[j]
+						if s2.is_alive and s2.tier == tier and s2.unit_type == s1.unit_type then
+							squad_a = s1
+							squad_b = s2
+							break
+						end
+					end
+					if squad_a then break end
+				end
+			end
+
+			if squad_a and squad_b then
+				found = true
+				merged_any = true
+				M.merge_units(squad_a.row, squad_a.col, squad_b.row, squad_b.col)
+				break
+			end
+		end
+
+		if not found then
+			break
+		end
+	end
+
+	return merged_any
+end
+
 function M.move_squad(from_r, from_c, to_r, to_c)
 	if phase ~= config.PHASE_PREP then return false end
 	local squad = grid.get_player_squad(from_r, from_c)
@@ -729,9 +849,98 @@ function M.move_squad(from_r, from_c, to_r, to_c)
 	end
 end
 
+function M.get_sell_price(item)
+	if not item then return 0 end
+	if item.is_card or item.is_crate then
+		return 5
+	end
+	local tier = item.tier or 1
+	local base = math.max(5, math.floor(economy.get_buy_cost() * 0.5))
+	local mult = 2 ^ math.min(6, tier - 1)
+	return math.floor(base * mult)
+end
+
+function M.sell_squad(squad)
+	if phase ~= config.PHASE_PREP then return false end
+	if not squad or not squad.is_alive then return false end
+
+	local r = squad.row
+	local c = squad.col
+	local sell_price = M.get_sell_price(squad)
+	local sell_pos = vmath.vector3(config.TRASH_BIN_POS)
+
+	grid.set_player_squad(r, c, nil)
+	squad.is_alive = false
+
+	for i = #player_squads, 1, -1 do
+		if player_squads[i].id == squad.id then
+			table.remove(player_squads, i)
+			break
+		end
+	end
+
+	if view_handlers.sell_squad then
+		view_handlers.sell_squad(squad, sell_pos)
+	elseif view_handlers.despawn_squad then
+		view_handlers.despawn_squad(squad)
+	end
+
+	economy.add_coins(sell_price, sell_pos)
+
+	if view_handlers.play_effect then
+		view_handlers.play_effect("sell", sell_pos, { price = sell_price })
+	end
+
+	pcall(function()
+		local cam = require("orthographic.camera")
+		cam.shake(hash("/camera"), 0.005, 0.1)
+	end)
+
+	M.save_game()
+	return true
+end
+
+function M.sell_card(card_item)
+	if phase ~= config.PHASE_PREP then return false end
+	if not card_item then return false end
+
+	local r = card_item.row
+	local c = card_item.col
+	local sell_price = M.get_sell_price(card_item)
+	local sell_pos = vmath.vector3(config.TRASH_BIN_POS)
+
+	grid.set_player_item(r, c, nil)
+
+	for i = #cards_on_field, 1, -1 do
+		if cards_on_field[i].id == card_item.id then
+			table.remove(cards_on_field, i)
+			break
+		end
+	end
+
+	if view_handlers.sell_card then
+		view_handlers.sell_card(card_item, sell_pos)
+	elseif view_handlers.despawn_card then
+		view_handlers.despawn_card(card_item)
+	end
+
+	economy.add_coins(sell_price, sell_pos)
+
+	if view_handlers.play_effect then
+		view_handlers.play_effect("sell", sell_pos, { price = sell_price })
+	end
+
+	pcall(function()
+		local cam = require("orthographic.camera")
+		cam.shake(hash("/camera"), 0.005, 0.1)
+	end)
+
+	M.save_game()
+	return true
+end
+
 function M.start_battle()
 	if phase ~= config.PHASE_PREP then return end
-	if not tutorial.is_battle_allowed() then return end
 	if #player_squads == 0 then return end
 
 	poki.gameplay_start()
@@ -887,21 +1096,30 @@ function M.update_battle(dt)
 		local win_reward = level_data.win_reward or config.WIN_REWARD
 		economy.add_coins(win_reward, vmath.vector3(150, 400, 0))
 		poki.gameplay_stop()
+		poki.gameplay_start()
 		M.start_level(current_level + 1)
 		return
 	elseif player_alive_count == 0 then
 		poki.gameplay_stop()
+		poki.gameplay_start()
 		M.start_level(current_level)
 		return
 	end
 
+	-- Update Drum of Rage timer
+	if rage_buff_timer > 0 then
+		rage_buff_timer = math.max(0, rage_buff_timer - dt)
+	end
+	local is_drum_active = (rage_buff_timer > 0)
+
 	-- Process all living squads: player squads move/attack enemy, and vice versa
 	local all_groups = {
-		{ list = player_squads, foes = enemy_squads },
-		{ list = enemy_squads, foes = player_squads }
+		{ list = player_squads, foes = enemy_squads, is_player = true },
+		{ list = enemy_squads, foes = player_squads, is_player = false }
 	}
 
 	for _, g in ipairs(all_groups) do
+		local drum_mult = (g.is_player and is_drum_active) and 1.15 or 1.0 -- +15% attack speed from Drum of Rage
 		for _, squad in ipairs(g.list) do
 			if squad.is_alive then
 				-- Validate or find target
@@ -930,9 +1148,9 @@ function M.update_battle(dt)
 							for u_idx = 1, active_units do
 								local u = squad.sub_units[u_idx]
 								if u then
-									u.attack_timer = u.attack_timer - dt
+									u.attack_timer = u.attack_timer - (dt * drum_mult)
 									if u.attack_timer <= 0 then
-										u.attack_timer = squad.attack_interval + (math.random() - 0.5) * 0.12
+										u.attack_timer = (squad.attack_interval / drum_mult) + (math.random() - 0.5) * 0.12
 
 										if squad.unit_type == config.UNIT_ARCHER then
 											-- Each archer fires their own arrow from their individual formation position!

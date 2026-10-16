@@ -1,5 +1,5 @@
 local config = require("main.modules.config")
-
+local battle_state = require("main.modules.battle_state")
 local function get_formation_offsets(count)
 	return config.get_formation_offsets(count)
 end
@@ -80,9 +80,8 @@ local function setup_visuals(self, data)
 	go.set("#base_ring", "tint", self.ring_tint)
 
 	-- Tier badge & label
---	go.set("#tier_badge", "tint", vmath.vector4(0.08, 0.10, 0.16, 0.88))
 	go.set("#tier_label", "text", tostring(self.tier))
-	--msg.post("#tier_badge", "enable")
+	go.set("#tier_label", "scale", vmath.vector3(0.55, 0.55, 1.0))
 	msg.post("#tier_label", "enable")
 	self.combat_hidden_badge = false
 
@@ -91,8 +90,9 @@ local function setup_visuals(self, data)
 	local is_enemy = (self.team == config.TEAM_ENEMY)
 	for i = 1, #offsets do
 		local off = offsets[i]
-		local w_id = factory.create(factory_url, off)
-		go.set_parent(w_id, my_id)
+		local w_id = factory.create(factory_url)
+		go.set_parent(w_id, my_id, false)
+		go.set_position(off, w_id)
 		msg.post(w_id, "set_tint", { tint = warrior_tint, is_enemy = is_enemy })
 
 		-- Vanguard weight: warriors towards forward direction (+Y for player, -Y for enemy)
@@ -172,14 +172,18 @@ end
 local function replenish_all(self, data)
 	local pos = data and (data.pos or data.current_pos or data.home_pos)
 	if pos then
+		pos = vmath.vector3(pos.x, pos.y, 0.0)
 		self.last_pos = vmath.vector3(pos)
 		go.cancel_animations(".", "position")
 		go.set_position(pos)
+	else
+		local p = go.get_position(".")
+		p.z = 0.0
+		go.set_position(p)
 	end
 	self.is_moving = false
 	go.cancel_animations(".", "scale")
 	go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
-	go.set(".", "position.z", 0.0)
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
 		if w then
@@ -194,9 +198,11 @@ local function replenish_all(self, data)
 	self.alive_count = #self.warriors
 
 	-- Re-enable tier badge & label during preparation phase
+	-- Re-enable tier badge & label during preparation phase
 	self.combat_hidden_badge = false
 	msg.post("#tier_label", "enable")
 	go.set("#tier_label", "text", tostring(self.tier or 1))
+	go.set("#tier_label", "scale", vmath.vector3(0.55, 0.55, 1.0))
 	go.set("#base_ring", "tint", self.ring_tint or config.TIER_RING_COLORS[1])
 
 	pcall(function()
@@ -227,10 +233,14 @@ local function update_combat_visuals(self, data)
 	end
 
 	-- In active battle phase: hide tier number so combat is clean & unobstructed!
-	if self.is_moving and not self.combat_hidden_badge then
+	if not self.combat_hidden_badge and battle_state.get_phase() == config.PHASE_BATTLE then
 		self.combat_hidden_badge = true
-		--msg.post("#tier_badge", "disable")
 		msg.post("#tier_label", "disable")
+	end
+
+	-- Drum of rage clicker visual: kept natural without heavily tinting troops orange
+	if not self.has_custom_buff then
+		msg.post("#buff_ring", "disable")
 	end
 
 	-- Remove units as HP decreases (visual unit count = HP fraction)
@@ -350,11 +360,15 @@ function on_message(self, message_id, message, sender)
 	elseif message_id == hash("drag_state") then
 		if message.dragging then
 			go.cancel_animations(".", "scale")
-			go.set(".", "position.z", 10.0)
+			local p = go.get_position(".")
+			p.z = 0.75
+			go.set_position(p)
 			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.28, 1.28, 1.0), go.EASING_OUTBACK, 0.12)
 		else
 			go.cancel_animations(".", "scale")
-			go.set(".", "position.z", 0.0)
+			local p = go.get_position(".")
+			p.z = 0.0
+			go.set_position(p)
 			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.12)
 		end
 	elseif message_id == hash("merge_hint") then

@@ -48,6 +48,28 @@ function M.world_to_player_cell(wx, wy)
 	return nil, nil
 end
 
+-- Find closest player cell within max_dist radius for smooth forgiving drag & drop
+function M.find_closest_player_cell(wx, wy, max_dist)
+	max_dist = max_dist or (config.CELL_STEP * 0.75)
+	local best_r, best_c = nil, nil
+	local min_d2 = max_dist * max_dist
+	for r = 1, config.GRID_ROWS do
+		local cy = config.PLAYER_ROW_Y[r]
+		local dy = wy - cy
+		for c = 1, config.GRID_COLS do
+			local cx = config.COL_X[c]
+			local dx = wx - cx
+			local d2 = dx * dx + dy * dy
+			if d2 < min_d2 then
+				min_d2 = d2
+				best_r = r
+				best_c = c
+			end
+		end
+	end
+	return best_r, best_c
+end
+
 function M.get_player_item(row, col)
 	if player_cells[row] then
 		return player_cells[row][col]

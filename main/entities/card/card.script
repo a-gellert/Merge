@@ -36,7 +36,9 @@ function on_message(self, message_id, message, sender)
 		if message.dragging then
 			self.is_dragging = true
 			go.cancel_animations(".", "scale")
-			go.set(".", "position.z", 10.0)
+			local p = go.get_position(".")
+			p.z = 0.75
+			go.set_position(p)
 			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.22, 1.22, 1.0), go.EASING_OUTBACK, 0.12)
 			local info = cards.CARD_INFO[self.card_type]
 			if info and info.glow_color then
@@ -46,7 +48,9 @@ function on_message(self, message_id, message, sender)
 		else
 			self.is_dragging = false
 			go.cancel_animations(".", "scale")
-			go.set(".", "position.z", 0.05)
+			local p = go.get_position(".")
+			p.z = 0.05
+			go.set_position(p)
 			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.12)
 			local info = cards.CARD_INFO[self.card_type]
 			if info and info.glow_color then

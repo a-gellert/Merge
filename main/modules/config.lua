@@ -19,7 +19,7 @@ M.PLAYER_ROW_Y = { 130, 190, 250, 310 }
 M.ENEMY_ROW_Y = { 365, 425, 485, 545 }
 
 -- Fibonacci sequence for number of visual warriors in a squad per tier
-M.FIBONACCI = { 1, 3, 5, 9, 13, 21, 34, 55, 89, 144 }--специально исправил!
+M.FIBONACCI = { 1, 3, 5, 9, 13, 21, 34, 55, 89, 144, 200 }--специально исправил!
 M.MAX_TIER = #M.FIBONACCI
 
 -- Teams
@@ -40,30 +40,34 @@ M.PHASE_DEFEAT = "DEFEAT"
 M.UNIT_STATS = {
 	[M.UNIT_MELEE] = {
 		hp = 110,
-		damage = 24,
+		damage = 12, -- reduced 2x (was 24) to make battles last longer
 		attack_interval = 0.7,
 		attack_range = 28,
 		speed = 85,
 	},
 	[M.UNIT_ARCHER] = {
 		hp = 70,
-		damage = 16,
+		damage = 8, -- reduced 2x (was 16) to make battles last longer
 		attack_interval = 1.05,
 		attack_range = 195,
 		speed = 70,
-		miss_radius = 14, -- Archers can miss slightly
+		miss_radius = 10, -- Archers can miss slightly
 	}
 }
 
 -- Economy settings
-M.START_COINS = 10
+M.START_COINS = 25
 M.BASE_BUY_COST = 10
 M.BUY_COST_STEP = 5
-M.KILL_REWARD = 6
-M.WIN_REWARD = 15
+M.KILL_REWARD = 12
+M.WIN_REWARD = 25
+
+-- Trash Bin (Sell Zone)
+M.TRASH_BIN_POS = vmath.vector3(200, 338, 0.6)
+M.TRASH_BIN_RADIUS = 38
 
 -- Projectile Pool
-M.PROJECTILE_POOL_SIZE = 150
+M.PROJECTILE_POOL_SIZE = 600
 M.PROJECTILE_SPEED = 420
 M.PROJECTILE_HIT_RADIUS = 20
 

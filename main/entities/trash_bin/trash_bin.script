@@ -1,0 +1,118 @@
+local COLOR_PLATE_NORMAL = vmath.vector4(0.85, 0.22, 0.28, 0.95)
+local COLOR_PLATE_FILL_NORMAL = vmath.vector4(0.24, 0.05, 0.08, 0.95)
+local COLOR_GLOW_NORMAL = vmath.vector4(0.9, 0.15, 0.2, 0.25)
+
+local COLOR_PLATE_HOVER = vmath.vector4(1.0, 0.35, 0.38, 1.0)
+local COLOR_PLATE_FILL_HOVER = vmath.vector4(0.42, 0.08, 0.12, 1.0)
+local COLOR_GLOW_HOVER = vmath.vector4(1.0, 0.85, 0.25, 0.65)
+
+local BASE_Y = 400
+
+function init(self)
+	self.is_visible = false
+	self.is_hovered = false
+
+	go.set("#bg_glow", "tint", COLOR_GLOW_NORMAL)
+	go.set("#plate", "tint", COLOR_PLATE_NORMAL)
+	go.set("#plate_fill", "tint", COLOR_PLATE_FILL_NORMAL)
+	go.set("#can_body", "tint", vmath.vector4(0.92, 0.94, 0.98, 1.0))
+	go.set("#can_lid", "tint", vmath.vector4(0.95, 0.96, 1.0, 1.0))
+	go.set("#can_handle", "tint", vmath.vector4(0.95, 0.96, 1.0, 1.0))
+	go.set("#coin_icon", "tint", vmath.vector4(1.0, 0.82, 0.15, 1.0))
+
+	-- Initially hidden
+	go.set_scale(vmath.vector3(0.001, 0.001, 1.0))
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("show") then
+		self.is_visible = true
+		self.is_hovered = false
+
+		go.set("#price_label", "text", "+" .. tostring(message.price or 0))
+
+		go.cancel_animations(".", "scale")
+		go.cancel_animations(".", "position.y")
+		go.set(".", "position.y", BASE_Y)
+		go.set_scale(vmath.vector3(0.01, 0.01, 1.0))
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.2)
+
+		go.set("#can_lid", "scale", vmath.vector3(0.85, 0.22, 1.0))
+		go.set("#can_handle", "scale", vmath.vector3(0.35, 0.14, 1.0))
+		go.set("#coin_icon", "scale", vmath.vector3(0.8, 0.8, 1.0))
+		go.set("#plate", "tint", COLOR_PLATE_NORMAL)
+		go.set("#plate_fill", "tint", COLOR_PLATE_FILL_NORMAL)
+		go.set("#bg_glow", "tint", COLOR_GLOW_NORMAL)
+
+	elseif message_id == hash("set_hover") then
+		if not self.is_visible then return end
+
+		if message.hovered and not self.is_hovered then
+			self.is_hovered = true
+
+			-- Pop up scale and float slightly upward
+			go.cancel_animations(".", "scale")
+			go.cancel_animations(".", "position.y")
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.22, 1.22, 1.0), go.EASING_OUTBACK, 0.15)
+			go.animate(".", "position.y", go.PLAYBACK_ONCE_FORWARD, BASE_Y + 5, go.EASING_OUTBACK, 0.15)
+
+			-- Animate lid & coin icon expanding
+			go.cancel_animations("#can_lid", "scale")
+			go.cancel_animations("#can_handle", "scale")
+			go.cancel_animations("#coin_icon", "scale")
+			go.animate("#can_lid", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.05, 0.36, 1.0), go.EASING_OUTBACK, 0.15)
+			go.animate("#can_handle", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.45, 0.22, 1.0), go.EASING_OUTBACK, 0.15)
+			go.animate("#coin_icon", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, 0.15)
+
+			-- Highlight plate and glow
+			go.set("#plate", "tint", COLOR_PLATE_HOVER)
+			go.set("#plate_fill", "tint", COLOR_PLATE_FILL_HOVER)
+			go.set("#bg_glow", "tint", COLOR_GLOW_HOVER)
+
+		elseif not message.hovered and self.is_hovered then
+			self.is_hovered = false
+
+			-- Return scale and position to normal
+			go.cancel_animations(".", "scale")
+			go.cancel_animations(".", "position.y")
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTQUAD, 0.12)
+			go.animate(".", "position.y", go.PLAYBACK_ONCE_FORWARD, BASE_Y, go.EASING_OUTQUAD, 0.12)
+
+			-- Reset lid & coin scale
+			go.cancel_animations("#can_lid", "scale")
+			go.cancel_animations("#can_handle", "scale")
+			go.cancel_animations("#coin_icon", "scale")
+			go.animate("#can_lid", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.85, 0.22, 1.0), go.EASING_OUTQUAD, 0.12)
+			go.animate("#can_handle", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.35, 0.14, 1.0), go.EASING_OUTQUAD, 0.12)
+			go.animate("#coin_icon", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.8, 0.8, 1.0), go.EASING_OUTQUAD, 0.12)
+
+			-- Normal tints
+			go.set("#plate", "tint", COLOR_PLATE_NORMAL)
+			go.set("#plate_fill", "tint", COLOR_PLATE_FILL_NORMAL)
+			go.set("#bg_glow", "tint", COLOR_GLOW_NORMAL)
+		end
+
+	elseif message_id == hash("sell") then
+		self.is_visible = false
+		self.is_hovered = false
+
+		-- Swallow / munch bounce punch
+		go.cancel_animations(".", "scale")
+		go.cancel_animations(".", "position.y")
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.35, 1.35, 1.0), go.EASING_OUTBOUNCE, 0.1, 0, function()
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.001, 0.001, 1.0), go.EASING_INBACK, 0.12)
+		end)
+
+		go.animate("#can_lid", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.7, 0.12, 1.0), go.EASING_INQUAD, 0.08)
+
+	elseif message_id == hash("hide") then
+		if not self.is_visible then return end
+		self.is_visible = false
+		self.is_hovered = false
+
+		go.cancel_animations(".", "scale")
+		go.cancel_animations(".", "position.y")
+		go.animate(".", "position.y", go.PLAYBACK_ONCE_FORWARD, BASE_Y, go.EASING_INQUAD, 0.15)
+		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.001, 0.001, 1.0), go.EASING_INBACK, 0.15)
+	end
+end

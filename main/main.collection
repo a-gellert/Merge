@@ -23,4 +23,13 @@ instances {
   id: "main_gui"
   prototype: "/main/gui/main_gui.go"
 }
+instances {
+  id: "trash_bin"
+  prototype: "/main/entities/trash_bin/trash_bin.go"
+  position {
+    x: 200.0
+    y: 338.0
+    z: 0.6
+  }
+}
 scale_along_z: 0

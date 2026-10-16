@@ -144,10 +144,10 @@ nodes {
 }
 nodes {
   position {
-    x: -96.0
+    x: -110.0
   }
   size {
-    x: 88.0
+    x: 68.0
     y: 52.0
   }
   color {
@@ -208,8 +208,8 @@ nodes {
     y: -10.0
   }
   scale {
-    x: 0.3
-    y: 0.3
+    x: 0.26
+    y: 0.26
   }
   size {
     x: 130.0
@@ -223,9 +223,114 @@ nodes {
   inherit_alpha: true
 }
 nodes {
+  position {
+    x: -37.0
+  }
   size {
-    x: 84.0
-    y: 44.0
+    x: 66.0
+    y: 52.0
+  }
+  color {
+    x: 0.52
+    y: 0.22
+    z: 0.82
+  }
+  type: TYPE_BOX
+  texture: "druid/rect_round2_width2"
+  id: "btn_merge"
+  parent: "panel_bottom"
+  slice9 {
+    x: 4.0
+    y: 4.0
+    z: 4.0
+    w: 4.0
+  }
+}
+nodes {
+  position {
+    x: -5.0
+    y: 11.0
+  }
+  size {
+    x: 9.0
+    y: 9.0
+  }
+  color {
+    x: 1.0
+    y: 0.85
+    z: 0.2
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "icon_merge_left"
+  parent: "btn_merge"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 5.0
+    y: 11.0
+  }
+  size {
+    x: 9.0
+    y: 9.0
+  }
+  color {
+    x: 1.0
+    y: 0.85
+    z: 0.2
+  }
+  type: TYPE_BOX
+  texture: "druid/ui_circle_16"
+  id: "icon_merge_right"
+  parent: "btn_merge"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: 11.0
+  }
+  size {
+    x: 8.0
+    y: 8.0
+  }
+  color {
+    x: 1.0
+    y: 1.0
+    z: 1.0
+  }
+  type: TYPE_BOX
+  texture: "druid/icon_arrow"
+  id: "icon_merge_arrow"
+  parent: "btn_merge"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -10.0
+  }
+  scale {
+    x: 0.32
+    y: 0.32
+  }
+  size {
+    x: 100.0
+    y: 40.0
+  }
+  type: TYPE_TEXT
+  text: "AUTO"
+  font: "druid_text_bold"
+  id: "txt_merge"
+  parent: "btn_merge"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 37.0
+  }
+  size {
+    x: 66.0
+    y: 52.0
   }
   color {
     x: 0.12
@@ -245,7 +350,7 @@ nodes {
 }
 nodes {
   position {
-    x: -27.0
+    y: 11.0
   }
   size {
     x: 13.0
@@ -264,14 +369,14 @@ nodes {
 }
 nodes {
   position {
-    x: 7.0
+    y: -10.0
   }
   scale {
-    x: 0.42
-    y: 0.42
+    x: 0.35
+    y: 0.35
   }
   size {
-    x: 110.0
+    x: 100.0
     y: 40.0
   }
   type: TYPE_TEXT
@@ -283,10 +388,10 @@ nodes {
 }
 nodes {
   position {
-    x: 96.0
+    x: 110.0
   }
   size {
-    x: 88.0
+    x: 68.0
     y: 52.0
   }
   color {
@@ -323,8 +428,8 @@ nodes {
     y: -10.0
   }
   scale {
-    x: 0.48
-    y: 0.48
+    x: 0.38
+    y: 0.38
   }
   size {
     x: 90.0

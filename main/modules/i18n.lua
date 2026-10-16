@@ -11,6 +11,7 @@ local STRINGS = {
 	[M.LANG_EN] = {
 		BUY = "BUY",
 		BATTLE = "BATTLE",
+		AUTO_MERGE = "AUTO",
 		LEVEL = "LEVEL",
 		VICTORY = "VICTORY!",
 		DEFEAT = "DEFEAT!",
@@ -22,10 +23,12 @@ local STRINGS = {
 		TUTORIAL_BUY = "Tap Buy to summon a warrior",
 		TUTORIAL_MERGE = "Drag and merge squads",
 		TUTORIAL_BATTLE = "Tap Battle to fight!",
+		DRUM_OF_RAGE = "DRUM OF RAGE +15% SPEED!",
 	},
 	[M.LANG_PT] = {
 		BUY = "COMPRAR",
 		BATTLE = "BATALHA",
+		AUTO_MERGE = "FUNDIR",
 		LEVEL = "NÍVEL",
 		VICTORY = "VITÓRIA!",
 		DEFEAT = "DERROTA!",
@@ -37,10 +40,12 @@ local STRINGS = {
 		TUTORIAL_BUY = "Toque em Comprar para invocar",
 		TUTORIAL_MERGE = "Arraste e funda esquadrões",
 		TUTORIAL_BATTLE = "Toque em Batalha para lutar!",
+		DRUM_OF_RAGE = "TAMBOR DE FÚRIA +15% VELOCIDADE!",
 	},
 	[M.LANG_RU] = {
 		BUY = "КУПИТЬ",
 		BATTLE = "В БОЙ",
+		AUTO_MERGE = "АВТО",
 		LEVEL = "УРОВЕНЬ",
 		VICTORY = "ПОБЕДА!",
 		DEFEAT = "ПОРАЖЕНИЕ!",
@@ -52,10 +57,12 @@ local STRINGS = {
 		TUTORIAL_BUY = "Нажми Купить, чтобы призвать воина",
 		TUTORIAL_MERGE = "Перетащи и объедини отряды",
 		TUTORIAL_BATTLE = "Нажми В бой!",
+		DRUM_OF_RAGE = "БАРАБАН ЯРОСТИ +15% СКОРОСТЬ!",
 	},
 	[M.LANG_TR] = {
 		BUY = "SATIN AL",
 		BATTLE = "SAVAŞ",
+		AUTO_MERGE = "BİRLEŞTİR",
 		LEVEL = "SEVİYE",
 		VICTORY = "ZAFER!",
 		DEFEAT = "YENİLGİ!",
@@ -67,7 +74,8 @@ local STRINGS = {
 		TUTORIAL_BUY = "Savaşçı çağırmak için Satın Al'a bas",
 		TUTORIAL_MERGE = "Birlikleri sürükleyip birleştir",
 		TUTORIAL_BATTLE = "Savaş'a bas ve başla!",
-	}
+		DRUM_OF_RAGE = "ÖFKE DAVULU +%15 HIZ!",
+	},
 }
 
 local function detect_language()

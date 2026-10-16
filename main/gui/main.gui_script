@@ -52,7 +52,7 @@ local function update_economy_display(coins, cost)
 	gui.set_text(gui.get_node("txt_buy"), buy_label)
 
 	local btn_node = gui.get_node("btn_buy")
-	if coins >= cost and tutorial.is_buy_allowed() then
+	if coins >= cost then
 		gui.set_color(btn_node, vmath.vector4(0.16, 0.34, 0.65, 1.0))
 	else
 		gui.set_color(btn_node, vmath.vector4(0.25, 0.28, 0.35, 0.8))
@@ -64,6 +64,13 @@ local function update_economy_display(coins, cost)
 		gui.set_color(btn_rew_node, vmath.vector4(0.12, 0.52, 0.32, 1.0))
 	else
 		gui.set_color(btn_rew_node, vmath.vector4(0.25, 0.30, 0.28, 0.8))
+	end
+
+	local btn_merge_node = gui.get_node("btn_merge")
+	if battle_state.can_auto_merge() then
+		gui.set_color(btn_merge_node, vmath.vector4(0.52, 0.22, 0.82, 1.0))
+	else
+		gui.set_color(btn_merge_node, vmath.vector4(0.28, 0.22, 0.35, 0.75))
 	end
 end
 
@@ -85,7 +92,7 @@ local function update_tutorial_ui(self, step)
 
 	if step == tutorial.STEP_BUY then
 		gui.set_visible(hand, true)
-		gui.set_position(hand, vmath.vector3(74, 84, 0))
+		gui.set_position(hand, vmath.vector3(56, 84, 0))
 		gui.animate(hand, "position.y", 70, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 		gui.set_text(hint, i18n.get("TUTORIAL_BUY"))
 	elseif step == tutorial.STEP_MERGE then
@@ -97,7 +104,7 @@ local function update_tutorial_ui(self, step)
 		gui.set_text(hint, i18n.get("TUTORIAL_MERGE"))
 	elseif step == tutorial.STEP_BATTLE then
 		gui.set_visible(hand, true)
-		gui.set_position(hand, vmath.vector3(212, 86, 0))
+		gui.set_position(hand, vmath.vector3(236, 86, 0))
 		gui.animate(hand, "position.y", 72, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 		gui.set_text(hint, i18n.get("TUTORIAL_BATTLE"))
 	else
@@ -190,12 +197,36 @@ function init(self)
 	-- Localized static texts
 	gui.set_text(gui.get_node("txt_battle"), i18n.get("BATTLE"))
 	gui.set_text(gui.get_node("txt_reward"), i18n.get("REWARD"))
+	gui.set_text(gui.get_node("txt_merge"), i18n.get("AUTO_MERGE"))
 
 	-- Button handlers
 	self.btn_buy = self.druid:new_button("btn_buy", function()
 		poki.on_player_input()
 		hide_popups()
 		battle_state.buy_unit()
+	end)
+
+	self.btn_merge = self.druid:new_button("btn_merge", function()
+		poki.on_player_input()
+		hide_popups()
+		local merged = battle_state.auto_merge()
+		local btn_merge_node = gui.get_node("btn_merge")
+		if merged then
+			-- Juicy feedback punch
+			gui.set_scale(btn_merge_node, vmath.vector3(1.15, 1.15, 1.0))
+			gui.animate(btn_merge_node, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBOUNCE, 0.22)
+			pcall(function()
+				local cam = require("orthographic.camera")
+				cam.shake(hash("/camera"), 0.005, 0.08)
+			end)
+		else
+			-- Subtle horizontal wobble when nothing can be merged
+			gui.animate(btn_merge_node, "position.x", -33, gui.EASING_INOUTSINE, 0.05, 0, function()
+				gui.animate(btn_merge_node, "position.x", -41, gui.EASING_INOUTSINE, 0.05, 0, function()
+					gui.animate(btn_merge_node, "position.x", -37, gui.EASING_OUTSINE, 0.05)
+				end)
+			end)
+		end
 	end)
 
 	self.btn_reward = self.druid:new_button("btn_reward", function()
@@ -279,15 +310,17 @@ function update(self, dt)
 	local cur_cost = economy.get_buy_cost()
 	local cur_level = battle_state.get_current_level()
 	local cur_phase = battle_state.get_phase()
+	local cur_can_merge = battle_state.can_auto_merge()
 
 	if self.dirty_ui or cur_level ~= self.last_level then
 		self.last_level = cur_level
 		update_level_display(cur_level)
 	end
 
-	if self.dirty_ui or cur_coins ~= self.last_coins or cur_cost ~= self.last_cost then
+	if self.dirty_ui or cur_coins ~= self.last_coins or cur_cost ~= self.last_cost or cur_can_merge ~= self.last_can_merge then
 		self.last_coins = cur_coins
 		self.last_cost = cur_cost
+		self.last_can_merge = cur_can_merge
 		update_economy_display(cur_coins, cur_cost)
 	end
 
@@ -302,6 +335,45 @@ function update(self, dt)
 	end
 
 	self.dirty_ui = false
+
+	-- Drum of Rage visual banner / indicator in battle
+	if cur_phase == config.PHASE_BATTLE then
+		local hint = gui.get_node("txt_tutorial_hint")
+		local is_raging = battle_state.get_rage_drum_active()
+		if is_raging then
+			if not self.rage_ui_active then
+				self.rage_ui_active = true
+				self.rage_sway_time = 0
+				gui.set_text(hint, i18n.get("DRUM_OF_RAGE"))
+				-- Soft semi-transparent amber-gold banner without harsh orange
+				gui.set_color(hint, vmath.vector4(1.0, 0.82, 0.35, 0.65))
+				gui.set_position(hint, vmath.vector3(0, 160, 0)) -- Shifted up towards top field (y=337.5 + 160 = ~497.5)
+				gui.set_scale(hint, vmath.vector3(0.50, 0.50, 1.0))
+			end
+			-- Continuous smooth sway and subtle floating bounce while active
+			self.rage_sway_time = (self.rage_sway_time or 0) + dt
+			local sway_angle = math.sin(self.rage_sway_time * 7.5) * 3.5
+			local bob_y = 160 + math.sin(self.rage_sway_time * 6.0) * 4.0
+			gui.set_rotation(hint, vmath.vector3(0, 0, sway_angle))
+			gui.set_position(hint, vmath.vector3(0, bob_y, 0))
+		else
+			if self.rage_ui_active then
+				self.rage_ui_active = false
+				gui.set_text(hint, "")
+				gui.set_color(hint, vmath.vector4(0.0, 0.95, 0.4, 1.0))
+				gui.set_scale(hint, vmath.vector3(0.46, 0.46, 1.0))
+				gui.set_rotation(hint, vmath.vector3(0, 0, 0))
+				gui.set_position(hint, vmath.vector3(0, 0, 0))
+			end
+		end
+	else
+		if self.rage_ui_active then
+			self.rage_ui_active = false
+			local hint = gui.get_node("txt_tutorial_hint")
+			gui.set_rotation(hint, vmath.vector3(0, 0, 0))
+			gui.set_position(hint, vmath.vector3(0, 0, 0))
+		end
+	end
 
 	if self.pending_earn_events and #self.pending_earn_events > 0 then
 		while #self.pending_earn_events > 0 do

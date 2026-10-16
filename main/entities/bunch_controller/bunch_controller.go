@@ -55,19 +55,19 @@ embedded_components {
   type: "label"
   data: "size {\n"
   "  x: 32.0\n"
-  "  y: 50.0\n"
+  "  y: 32.0\n"
   "}\n"
-  "outline {\n"
+  "color {\n"
   "  x: 0.8\n"
-  "  y: 0.9019608\n"
-  "  z: 1.0\n"
+  "  y: 0.8\n"
+  "  z: 0.2\n"
   "}\n"
   "text: \"1\"\n"
   "font: \"/druid/fonts/druid_text_bold.font\"\n"
-  "material: \"/builtins/fonts/font-df.material\"\n"
+  "material: \"/builtins/fonts/label-df.material\"\n"
   ""
   position {
-    x: 506.0
+    y: -31.0
     z: 0.2
   }
   scale {

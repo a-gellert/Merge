@@ -13,7 +13,14 @@ function on_message(self, message_id, message, sender)
 
 		go.set("#sprite", "tint", tint)
 
-		if p_type == "merge_ring" then
+		if p_type == "drum_ripple" then
+			-- Drum of Rage tap ripple: expands outward quickly and fades
+			go.set("#sprite", "scale", vmath.vector3(0.3, 0.3, 1.0))
+			go.animate("#sprite", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(scale * 3.8, scale * 3.8, 1.0), go.EASING_OUTQUAD, duration)
+			go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0.0, go.EASING_OUTQUAD, duration, 0, function()
+				msg.post(".", "recycle")
+			end)
+		elseif p_type == "merge_ring" then
 			-- Expanding shockwave ring
 			go.set("#sprite", "scale", vmath.vector3(0.2, 0.2, 1.0))
 			go.animate("#sprite", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(scale * 3.5, scale * 3.5, 1.0), go.EASING_OUTQUAD, duration)
