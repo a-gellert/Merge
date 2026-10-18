@@ -19,6 +19,13 @@ local function setup(self, data)
 	self.home_pos = data.home_pos or go.get_position()
 	self.row = data.row
 	self.col = data.col
+	if data.card_type == "upgrade" then
+		go.set("#sprite", "tint", vmath.vector4(1.0, 0.90, 0.45, 1.0))
+	elseif data.card_type == "clone" then
+		go.set("#sprite", "tint", vmath.vector4(0.55, 0.95, 1.0, 1.0))
+	else
+		go.set("#sprite", "tint", vmath.vector4(1.0, 1.0, 1.0, 1.0))
+	end
 end
 
 local function crack_open(self)
@@ -55,5 +62,30 @@ function on_message(self, message_id, message, sender)
 		self.home_pos = vmath.vector3(pos)
 		go.cancel_animations(".", "position")
 		go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_OUTQUAD, 0.14)
+	elseif message_id == hash("hide") then
+		if self.is_cracking then return end
+		go.cancel_animations(".", "scale")
+		local duration = message.duration or 0.18
+		if duration > 0 then
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, duration, 0, function()
+				msg.post("#sprite", "disable")
+				msg.post("#shadow", "disable")
+			end)
+		else
+			msg.post("#sprite", "disable")
+			msg.post("#shadow", "disable")
+			go.set_scale(vmath.vector3(0.01, 0.01, 1.0))
+		end
+	elseif message_id == hash("show") then
+		if self.is_cracking then return end
+		msg.post("#sprite", "enable")
+		msg.post("#shadow", "enable")
+		local duration = message.duration or 0.22
+		if duration > 0 then
+			go.set_scale(vmath.vector3(0.01, 0.01, 1.0))
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, duration)
+		else
+			go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
+		end
 	end
 end

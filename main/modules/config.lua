@@ -19,7 +19,7 @@ M.PLAYER_ROW_Y = { 130, 190, 250, 310 }
 M.ENEMY_ROW_Y = { 365, 425, 485, 545 }
 
 -- Fibonacci sequence for number of visual warriors in a squad per tier
-M.FIBONACCI = { 1, 3, 5, 9, 13, 21, 34, 55, 89, 144, 200 }--специально исправил!
+M.FIBONACCI = { 1, 3, 5, 9, 13, 21, 34, 55, 89, 144, 168, 200, 225 }--специально исправил!
 M.MAX_TIER = #M.FIBONACCI
 
 -- Teams
@@ -40,15 +40,15 @@ M.PHASE_DEFEAT = "DEFEAT"
 M.UNIT_STATS = {
 	[M.UNIT_MELEE] = {
 		hp = 110,
-		damage = 12, -- reduced 2x (was 24) to make battles last longer
+		damage = 18, -- reduced 2x (was 24) to make battles last longer
 		attack_interval = 0.7,
 		attack_range = 28,
 		speed = 85,
 	},
 	[M.UNIT_ARCHER] = {
 		hp = 70,
-		damage = 8, -- reduced 2x (was 16) to make battles last longer
-		attack_interval = 1.05,
+		damage = 6, -- reduced 2x (was 16) to make battles last longer
+		attack_interval = 0.8,
 		attack_range = 195,
 		speed = 70,
 		miss_radius = 10, -- Archers can miss slightly
@@ -57,9 +57,9 @@ M.UNIT_STATS = {
 
 -- Economy settings
 M.START_COINS = 25
-M.BASE_BUY_COST = 10
-M.BUY_COST_STEP = 5
-M.KILL_REWARD = 12
+M.BASE_BUY_COST = 15
+M.BUY_COST_STEP = 17
+M.KILL_REWARD = 3
 M.WIN_REWARD = 25
 
 -- Trash Bin (Sell Zone)

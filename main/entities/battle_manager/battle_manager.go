@@ -35,59 +35,22 @@ embedded_components {
 embedded_components {
   id: "board_bg"
   type: "sprite"
-  data: "default_animation: \"pixel\"\n"
+  data: "default_animation: \"arena_bg\"\n"
   "material: \"/builtins/materials/sprite.material\"\n"
   "textures {\n"
   "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
-  "}\n"
-  ""
-  position {
-    y: 300.0
-    z: -0.4
-  }
-  scale {
-    x: 420.0
-    y: 620.0
-  }
-}
-embedded_components {
-  id: "enemy_mat_fill"
-  type: "sprite"
-  data: "default_animation: \"pixel\"\n"
-  "material: \"/builtins/materials/sprite.material\"\n"
-  "textures {\n"
-  "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
+  "  texture: \"/main/assets/background.atlas\"\n"
   "}\n"
   ""
   position {
     x: 200.0
-    y: 1537.0
-    z: -0.32
+    y: 337.5
+    z: -0.45
   }
   scale {
-    x: 800.0
-    y: 600.0
+    x: 1.0
+    y: 1.0
+    z: 1.0
   }
 }
-embedded_components {
-  id: "player_mat_fill"
-  type: "sprite"
-  data: "default_animation: \"pixel\"\n"
-  "material: \"/builtins/materials/sprite.material\"\n"
-  "textures {\n"
-  "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
-  "}\n"
-  ""
-  position {
-    x: 200.0
-    y: -863.0
-    z: -0.32
-  }
-  scale {
-    x: 800.0
-    y: 600.0
-  }
-}
+

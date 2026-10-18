@@ -142,7 +142,7 @@ local function play_sell_effect(pos)
 	end
 end
 
-local function process_queue()
+local function process_queue(self)
 	while #action_queue > 0 do
 		local act = table.remove(action_queue, 1)
 		if act.type == "spawn" then
@@ -213,6 +213,7 @@ local function process_queue()
 				home_pos = crate_data.home_pos,
 				row = crate_data.row,
 				col = crate_data.col,
+				card_type = crate_data.forced_card_type,
 			})
 		elseif act.type == "despawn_crate" then
 			local go_id = act.go_id
@@ -227,6 +228,55 @@ local function process_queue()
 			else
 				if cb then
 					cb()
+				end
+			end
+		elseif act.type == "phase_change" then
+			local new_phase = act.phase
+			if new_phase == config.PHASE_BATTLE then
+				-- Hide grid cells smoothly
+				if self.cells then
+					for i = 1, #self.cells do
+						if go.exists(self.cells[i]) then
+							msg.post(self.cells[i], "hide", { duration = 0.18 })
+						end
+					end
+				end
+				-- Hide bonus crates
+				local crates = battle_state.get_crates()
+				for i = 1, #crates do
+					if crates[i].go_id and go.exists(crates[i].go_id) then
+						msg.post(crates[i].go_id, "hide", { duration = 0.18 })
+					end
+				end
+				-- Hide unused bonus cards
+				local cards_list = battle_state.get_cards()
+				for i = 1, #cards_list do
+					if cards_list[i].go_id and go.exists(cards_list[i].go_id) then
+						msg.post(cards_list[i].go_id, "hide", { duration = 0.18 })
+					end
+				end
+			elseif new_phase == config.PHASE_PREP then
+				-- Show grid cells smoothly
+				if self.cells then
+					for i = 1, #self.cells do
+						if go.exists(self.cells[i]) then
+							msg.post(self.cells[i], "show", { duration = 0.22 })
+						end
+					end
+				end
+				-- Show bonus crates
+				local crates = battle_state.get_crates()
+				for i = 1, #crates do
+					if crates[i].go_id and go.exists(crates[i].go_id) then
+						msg.post(crates[i].go_id, "show", { duration = 0.22 })
+					end
+				end
+				-- Show bonus cards
+				local cards_list = battle_state.get_cards()
+				for i = 1, #cards_list do
+					if cards_list[i].go_id and go.exists(cards_list[i].go_id) then
+						msg.post(cards_list[i].go_id, "show", { duration = 0.22 })
+					end
 				end
 			end
 		elseif act.type == "effect" then
@@ -269,13 +319,8 @@ end
 
 function init(self)
 
-	-- Initialize noble dark background and arena floor mats
-	go.set("#board_bg", "tint", config.COLOR_BG)
-	go.set("#enemy_mat_fill", "tint", config.COLOR_FLOOR_ENEMY)
-	--go.set("#enemy_mat", "tint", vmath.vector4(0.40, 0.15, 0.20, 0.65))
-	go.set("#player_mat_fill", "tint", config.COLOR_FLOOR_PLAYER)
-	--go.set("#player_mat", "tint", vmath.vector4(0.18, 0.28, 0.45, 0.65))
-	--go.set("#midline", "tint", vmath.vector4(0.25, 0.35, 0.50, 0.35))
+	-- Initialize arena background
+	go.set("#board_bg", "tint", vmath.vector4(1.0, 1.0, 1.0, 1.0))
 
 	spawn_grid_cells(self)
 	-- Enable automatic zoom on camera to adapt to different window/screen resolutions
@@ -408,6 +453,10 @@ function init(self)
 				table.insert(action_queue, { type = "sell_despawn", go_id = dead_id, pos = sell_pos })
 			end
 		end,
+
+		phase_changed = function(new_phase)
+			table.insert(action_queue, { type = "phase_change", phase = new_phase })
+		end,
 	})
 
 	init_effects()
@@ -419,7 +468,7 @@ function init(self)
 	else
 		battle_state.start_level(battle_state.get_current_level())
 	end
-	process_queue()
+	process_queue(self)
 end
 
 function final(self)
@@ -438,9 +487,9 @@ function final(self)
 end
 
 function update(self, dt)
-	process_queue()
+	process_queue(self)
 	battle_state.update_battle(dt)
-	process_queue()
+	process_queue(self)
 end
 
 function on_message(self, message_id, message, sender)

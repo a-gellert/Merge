@@ -63,6 +63,31 @@ function on_message(self, message_id, message, sender)
 		self.home_pos = vmath.vector3(pos)
 		go.cancel_animations(".", "position")
 		go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_OUTQUAD, 0.14)
+	elseif message_id == hash("hide") then
+		if self.is_dragging then return end
+		go.cancel_animations(".", "scale")
+		local duration = message.duration or 0.18
+		if duration > 0 then
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, duration, 0, function()
+				msg.post("#sprite", "disable")
+				msg.post("#glow", "disable")
+			end)
+		else
+			msg.post("#sprite", "disable")
+			msg.post("#glow", "disable")
+			go.set_scale(vmath.vector3(0.01, 0.01, 1.0))
+		end
+	elseif message_id == hash("show") then
+		if self.is_dragging then return end
+		msg.post("#sprite", "enable")
+		msg.post("#glow", "enable")
+		local duration = message.duration or 0.22
+		if duration > 0 then
+			go.set_scale(vmath.vector3(0.01, 0.01, 1.0))
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.0, 1.0, 1.0), go.EASING_OUTBACK, duration)
+		else
+			go.set_scale(vmath.vector3(1.0, 1.0, 1.0))
+		end
 	elseif message_id == hash("consume") then
 		-- Flash white, pop up, and shrink away into target
 		go.cancel_animations(".", "scale")

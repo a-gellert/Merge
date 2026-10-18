@@ -32,3 +32,6 @@ max_instances = 8192
 [sprite]
 max_count = 12800
 
+[gui]
+max_animation_count = 2048
+

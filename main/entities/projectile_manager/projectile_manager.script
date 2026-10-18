@@ -35,19 +35,37 @@ local function spawn_arrow(from_pos, target_squad, damage, miss_radius, is_fire)
 	end
 	if not arrow then return end
 
-	-- Calculate target point with slight spread/miss potential
+	-- Calculate target point aimed at individual units across squad formation area
 	local target_pos = target_squad.current_pos
-	local miss_x = 0
-	local miss_y = 0
-	if miss_radius and miss_radius > 0 then
+	local tox = 0
+	local toy = 0
+	local alive_count = math.min(target_squad.alive_units or 1, (target_squad.sub_units and #target_squad.sub_units) or 1)
+	if target_squad.sub_units and alive_count > 0 then
+		local rand_idx = math.random(1, alive_count)
+		local target_unit = target_squad.sub_units[rand_idx]
+		if target_unit and target_unit.offset then
+			tox = target_unit.offset.x
+			toy = target_unit.offset.y
+		end
+	else
+		local squad_r = math.max(6, 4.0 * math.sqrt(target_squad.unit_count or 1))
 		local angle = math.random() * math.pi * 2
-		local r = math.random() * miss_radius
-		miss_x = math.cos(angle) * r
-		miss_y = math.sin(angle) * r
+		local r = math.sqrt(math.random()) * squad_r
+		tox = math.cos(angle) * r
+		toy = math.sin(angle) * r
 	end
 
-	local tx = target_pos.x + miss_x
-	local ty = target_pos.y + miss_y
+	local scatter_x = 0
+	local scatter_y = 0
+	if miss_radius and miss_radius > 0 then
+		local angle = math.random() * math.pi * 2
+		local r = math.random() * (miss_radius * 0.4)
+		scatter_x = math.cos(angle) * r
+		scatter_y = math.sin(angle) * r
+	end
+
+	local tx = target_pos.x + tox + scatter_x
+	local ty = target_pos.y + toy + scatter_y
 	local start_pos = vmath.vector3(from_pos.x, from_pos.y, 0.5)
 
 	local dx = tx - start_pos.x
@@ -100,8 +118,6 @@ function final(self)
 end
 
 function update(self, dt)
-	local hit_r_sq = config.PROJECTILE_HIT_RADIUS * config.PROJECTILE_HIT_RADIUS
-
 	for i = 1, #pool do
 		local p = pool[i]
 		if p.active then
@@ -117,7 +133,8 @@ function update(self, dt)
 					local dx = p.pos.x - sx
 					local dy = p.pos.y - sy
 					local d2 = dx * dx + dy * dy
-					if d2 <= hit_r_sq then
+					local hit_radius = math.max(config.PROJECTILE_HIT_RADIUS, 4.0 * math.sqrt(p.target_squad.unit_count or 1) + 14)
+					if d2 <= (hit_radius * hit_radius) then
 						battle_state.apply_damage(p.target_squad, p.damage)
 					end
 				end

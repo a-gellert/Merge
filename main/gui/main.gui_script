@@ -121,7 +121,14 @@ local function hide_popups()
 	gui.set_visible(defeat_panel, false)
 end
 
+local MAX_FLYING_COINS = 10
+
 local function spawn_flying_coins(self, amount, origin_pos)
+	self.active_coin_count = self.active_coin_count or 0
+	if self.active_coin_count >= MAX_FLYING_COINS then
+		return
+	end
+
 	local target_pos = vmath.vector3(32, 566, 0)
 	local start_x = 150
 	local start_y = 350
@@ -130,38 +137,60 @@ local function spawn_flying_coins(self, amount, origin_pos)
 		start_y = origin_pos.y or start_y
 	end
 
-	local count = math.min(10, math.max(3, math.floor(amount / 5)))
+	-- Cap coins spawned per burst to 1..3
+	local count = math.min(3, math.max(1, math.floor(amount / 5)))
+	-- Don't exceed maximum active coins
+	count = math.min(count, MAX_FLYING_COINS - self.active_coin_count)
+	if count <= 0 then return end
+
 	local template = gui.get_node("coin_template")
+	local icon = gui.get_node("icon_coin")
 
 	for i = 1, count do
+		self.active_coin_count = self.active_coin_count + 1
 		local coin_node = gui.clone(template)
 		gui.set_enabled(coin_node, true)
 		gui.set_visible(coin_node, true)
 
 		-- Random burst offset from origin
 		local angle = math.random() * math.pi * 2
-		local burst_radius = math.random(15, 45)
+		local burst_radius = math.random(12, 30)
 		local burst_x = start_x + math.cos(angle) * burst_radius
 		local burst_y = start_y + math.sin(angle) * burst_radius
 
 		gui.set_position(coin_node, vmath.vector3(start_x, start_y, 0))
 		gui.set_scale(coin_node, vmath.vector3(0.1, 0.1, 1.0))
 
-		local delay = (i - 1) * 0.05
+		local delay = (i - 1) * 0.04
 		-- Initial burst & scale up
-		gui.animate(coin_node, "position", vmath.vector3(burst_x, burst_y, 0), gui.EASING_OUTQUAD, 0.22, delay, function()
+		gui.animate(coin_node, "position", vmath.vector3(burst_x, burst_y, 0), gui.EASING_OUTQUAD, 0.18, delay, function()
 			-- Fly towards coin balance in top-left
-			local fly_duration = 0.45 + math.random() * 0.15
+			local fly_duration = 0.35 + math.random() * 0.1
 			gui.animate(coin_node, "position", target_pos, gui.EASING_INQUAD, fly_duration, 0, function()
-				-- Punch scale on balance icon on impact
-				local icon = gui.get_node("icon_coin")
-				gui.set_scale(icon, vmath.vector3(1.3, 1.3, 1.0))
-				gui.animate(icon, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBOUNCE, 0.15)
+				self.active_coin_count = math.max(0, self.active_coin_count - 1)
 				gui.delete_node(coin_node)
+				if not self.icon_punching then
+					self.icon_punching = true
+					gui.set_scale(icon, vmath.vector3(1.2, 1.2, 1.0))
+					gui.animate(icon, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBOUNCE, 0.15, 0, function()
+						self.icon_punching = false
+					end)
+				end
 			end)
 		end)
-		gui.animate(coin_node, "scale", vmath.vector3(0.9, 0.9, 1.0), gui.EASING_OUTBACK, 0.2, delay)
+		gui.animate(coin_node, "scale", vmath.vector3(0.85, 0.85, 1.0), gui.EASING_OUTBACK, 0.15, delay)
 	end
+end
+
+local FORCES_MAX_SCALE = 60.0
+
+local function update_forces_bar(self, ratio)
+	ratio = math.max(0.0, math.min(1.0, ratio))
+	local player_scale_y = FORCES_MAX_SCALE * ratio
+	local enemy_scale_y = FORCES_MAX_SCALE * (1.0 - ratio)
+
+	gui.set_scale(self.forces_player, vmath.vector3(2.0, player_scale_y, 1.0))
+	gui.set_scale(self.forces_enemy, vmath.vector3(2.0, enemy_scale_y, 1.0))
 end
 
 local function on_phase_changed(self, phase)
@@ -174,16 +203,34 @@ local function on_phase_changed(self, phase)
 		hide_popups()
 		update_tutorial_ui(self, tutorial.get_step())
 		update_economy_display(economy.get_displayed_coins(), economy.get_buy_cost())
+		if self.forces_node then
+			gui.set_visible(self.forces_node, false)
+			self.forces_ratio = 0.5
+			update_forces_bar(self, 0.5)
+		end
 	elseif phase == config.PHASE_BATTLE then
 		-- Bottom buttons hide during battle
 		gui.set_visible(bottom_panel, false)
 		hide_popups()
 		stop_hand_animation(self)
 		gui.set_text(gui.get_node("txt_tutorial_hint"), "")
+
+		-- Show forces balance bar during battle
+		if self.forces_node then
+			gui.set_visible(self.forces_node, true)
+			local r = battle_state.get_forces_ratio()
+			self.forces_ratio = r
+			update_forces_bar(self, r)
+		end
 	else
 		gui.set_visible(bottom_panel, false)
 		hide_popups()
 		stop_hand_animation(self)
+		if self.forces_node then
+			gui.set_visible(self.forces_node, false)
+			self.forces_ratio = 0.5
+			update_forces_bar(self, 0.5)
+		end
 	end
 end
 
@@ -193,6 +240,15 @@ function init(self)
 
 	-- Explicitly disable and hide victory/defeat panels on start
 	hide_popups()
+
+	-- Forces balance bar
+	self.forces_node = gui.get_node("forces")
+	self.forces_bg = gui.get_node("forces_bg")
+	self.forces_enemy = gui.get_node("forces_enemy")
+	self.forces_player = gui.get_node("forces_player")
+	self.forces_ratio = 0.5
+	gui.set_visible(self.forces_node, false)
+	update_forces_bar(self, 0.5)
 
 	-- Localized static texts
 	gui.set_text(gui.get_node("txt_battle"), i18n.get("BATTLE"))
@@ -336,6 +392,13 @@ function update(self, dt)
 
 	self.dirty_ui = false
 
+	-- Forces balance bar update during battle
+	if cur_phase == config.PHASE_BATTLE and self.forces_node then
+		local target_ratio = battle_state.get_forces_ratio()
+		self.forces_ratio = (self.forces_ratio or target_ratio) + (target_ratio - (self.forces_ratio or target_ratio)) * math.min(1.0, dt * 10.0)
+		update_forces_bar(self, self.forces_ratio)
+	end
+
 	-- Drum of Rage visual banner / indicator in battle
 	if cur_phase == config.PHASE_BATTLE then
 		local hint = gui.get_node("txt_tutorial_hint")
@@ -376,9 +439,15 @@ function update(self, dt)
 	end
 
 	if self.pending_earn_events and #self.pending_earn_events > 0 then
+		local total_amount = 0
+		local last_pos = nil
 		while #self.pending_earn_events > 0 do
 			local ev = table.remove(self.pending_earn_events, 1)
-			spawn_flying_coins(self, ev.amount, ev.origin_pos)
+			total_amount = total_amount + (ev.amount or 1)
+			last_pos = ev.origin_pos or last_pos
+		end
+		if total_amount > 0 then
+			spawn_flying_coins(self, total_amount, last_pos)
 		end
 	end
 end

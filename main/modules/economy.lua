@@ -19,16 +19,7 @@ end
 
 function M.get_buy_cost()
 	local cost = config.BASE_BUY_COST -- 10
-	if buy_count <= 20 then
-		cost = cost + buy_count * 4
-	elseif buy_count <= 45 then
-		cost = cost + 20 * 4 + (buy_count - 20) * 8
-	elseif buy_count <= 80 then
-		cost = cost + 20 * 4 + 25 * 8 + (buy_count - 45) * 14
-	else
-		-- Мягкое плато с потолком 1200 монет, чтобы игрок всегда мог докупать юнитов
-		cost =  cost + 20 * 4 + 25 * 8 + 35 * 14 + (buy_count - 80) * 18
-	end
+	cost = math.floor(cost * (buy_count * 0.7 + 1))
 	return cost
 end
 

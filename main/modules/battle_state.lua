@@ -17,6 +17,7 @@ local enemy_squads = {}
 local cards_on_field = {}
 local crates_on_field = {}
 local rounds_since_crate = 0
+local consecutive_losses = 0
 local next_squad_id = 1
 local next_card_id = 1
 local next_crate_id = 1
@@ -82,12 +83,46 @@ function M.get_enemy_squads()
 	return enemy_squads
 end
 
+function M.get_forces_ratio()
+	local p_hp = 0
+	local e_hp = 0
+
+	for i = 1, #player_squads do
+		local sq = player_squads[i]
+		if sq.is_alive and sq.hp > 0 then
+			p_hp = p_hp + sq.hp + (sq.shield_hp or 0)
+		end
+	end
+
+	for i = 1, #enemy_squads do
+		local sq = enemy_squads[i]
+		if sq.is_alive and sq.hp > 0 then
+			e_hp = e_hp + sq.hp
+		end
+	end
+
+	local total = p_hp + e_hp
+	if total <= 0 then
+		return 0.5, p_hp, e_hp
+	end
+
+	return p_hp / total, p_hp, e_hp
+end
+
 function M.get_cards()
 	return cards_on_field
 end
 
 function M.get_crates()
 	return crates_on_field
+end
+
+function M.get_consecutive_losses()
+	return consecutive_losses
+end
+
+function M.set_consecutive_losses(count)
+	consecutive_losses = count or 0
 end
 
 function M.get_rage_drum_active()
@@ -230,13 +265,14 @@ function M.spawn_card(card_type, r, c)
 	return card_item
 end
 
-function M.spawn_drop_crate(r, c)
+function M.spawn_drop_crate(r, c, forced_card_type)
 	local home_pos = grid.get_cell_pos(config.TEAM_PLAYER, r, c)
 	local crate_item = {
 		id = next_crate_id,
 		is_crate = true,
 		row = r,
 		col = c,
+		forced_card_type = forced_card_type,
 		home_pos = vmath.vector3(home_pos),
 		current_pos = vmath.vector3(home_pos),
 		go_id = nil,
@@ -252,6 +288,17 @@ function M.spawn_drop_crate(r, c)
 	return crate_item
 end
 
+function M.try_spawn_pity_crate()
+	if consecutive_losses < 2 then return false end
+	local empty_r, empty_c = grid.find_first_empty_player_cell()
+	if not empty_r or not empty_c then return false end
+
+	consecutive_losses = 0
+	local card_type = (math.random() < 0.5) and cards.CARD_UPGRADE or cards.CARD_CLONE
+	M.spawn_drop_crate(empty_r, empty_c, card_type)
+	return true
+end
+
 function M.open_crate(crate_item)
 	if not crate_item or not crate_item.is_crate then return false end
 
@@ -265,13 +312,14 @@ function M.open_crate(crate_item)
 
 	local r = crate_item.row
 	local c = crate_item.col
+	local forced = crate_item.forced_card_type
 	if view_handlers.despawn_crate then
 		view_handlers.despawn_crate(crate_item, function()
-			local card_type = cards.get_random_card_type()
+			local card_type = forced or cards.get_random_card_type()
 			M.spawn_card(card_type, r, c)
 		end)
 	else
-		local card_type = cards.get_random_card_type()
+		local card_type = forced or cards.get_random_card_type()
 		M.spawn_card(card_type, r, c)
 	end
 	return true
@@ -339,6 +387,7 @@ function M.apply_card(card_item, target_squad)
 		end
 	end
 
+	M.try_spawn_pity_crate()
 	M.save_game()
 	return true
 end
@@ -403,6 +452,7 @@ function M.save_game()
 		table.insert(crates_save, {
 			row = cr.row,
 			col = cr.col,
+			card_type = cr.forced_card_type,
 		})
 	end
 
@@ -412,6 +462,7 @@ function M.save_game()
 		buy_count = economy.get_buy_count(),
 		tutorial_done = tutorial.is_completed(),
 		rounds_since_crate = rounds_since_crate,
+		consecutive_losses = consecutive_losses,
 		player_squads = squads_save,
 		cards = cards_save,
 		crates = crates_save,
@@ -425,6 +476,7 @@ function M.load_game()
 
 	current_level = tonumber(data.level) or 1
 	rounds_since_crate = tonumber(data.rounds_since_crate) or 0
+	consecutive_losses = tonumber(data.consecutive_losses) or 0
 	economy.set_state(data.coins, data.buy_count)
 	if data.tutorial_done then
 		tutorial.set_completed(true)
@@ -474,14 +526,14 @@ function M.load_game()
 
 	if data.crates and #data.crates > 0 then
 		for _, cr in ipairs(data.crates) do
-			M.spawn_drop_crate(cr.row, cr.col)
+			M.spawn_drop_crate(cr.row, cr.col, cr.card_type)
 		end
 	end
 
 	return true
 end
 
-function M.start_level(level_num)
+function M.start_level(level_num, is_defeat)
 	current_level = level_num or current_level
 	rage_buff_timer = 0
 	set_phase(config.PHASE_PREP)
@@ -527,8 +579,11 @@ function M.start_level(level_num)
 		end
 	end
 
+	-- If 2 consecutive losses occurred, grant pity crate with Upgrade or Clone card!
+	local spawned_pity = M.try_spawn_pity_crate()
+
 	-- Drop wooden loot crate every 3-4 rounds (levels)
-	if current_level > 1 then
+	if not is_defeat and not spawned_pity and current_level > 1 then
 		rounds_since_crate = rounds_since_crate + 1
 		if rounds_since_crate >= 3 then
 			local empty_r, empty_c = grid.find_first_empty_player_cell()
@@ -748,6 +803,7 @@ function M.merge_units(from_r, from_c, to_r, to_c)
 	end
 
 	tutorial.advance_from_merge()
+	M.try_spawn_pity_crate()
 	M.save_game()
 	return true
 end
@@ -896,6 +952,7 @@ function M.sell_squad(squad)
 		cam.shake(hash("/camera"), 0.005, 0.1)
 	end)
 
+	M.try_spawn_pity_crate()
 	M.save_game()
 	return true
 end
@@ -935,6 +992,7 @@ function M.sell_card(card_item)
 		cam.shake(hash("/camera"), 0.005, 0.1)
 	end)
 
+	M.try_spawn_pity_crate()
 	M.save_game()
 	return true
 end
@@ -1092,17 +1150,19 @@ function M.update_battle(dt)
 
 	-- Check Victory / Defeat conditions
 	if enemy_alive_count == 0 then
+		consecutive_losses = 0
 		local level_data = levels.get_level(current_level)
 		local win_reward = level_data.win_reward or config.WIN_REWARD
 		economy.add_coins(win_reward, vmath.vector3(150, 400, 0))
 		poki.gameplay_stop()
 		poki.gameplay_start()
-		M.start_level(current_level + 1)
+		M.start_level(current_level + 1, false)
 		return
 	elseif player_alive_count == 0 then
 		poki.gameplay_stop()
 		poki.gameplay_start()
-		M.start_level(current_level)
+		consecutive_losses = consecutive_losses + 1
+		M.start_level(current_level, true)
 		return
 	end
 
