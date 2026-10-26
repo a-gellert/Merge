@@ -76,11 +76,12 @@ for (let i = 1; i <= 10; i++) {
 // ---------------- POWER PILL (between fields) ----------------
 pane('power', null, 150, 322);
 box('power_bg', 'power', 0, 0, 150, 22, 'panel', C('#171a29', 0.72), { slice: 10 });
-box('power_icon_p', 'power', -62, 0, 15, 15, 'icon_sword', C('#7cc4ff'));
+// team faces (white-based unit sprite tinted like the armies)
+box('power_icon_p', 'power', -62, 0, 18, 18, 'unit_melee', C('#3a9dff'));
 text('txt_power_p', 'power', -50, 0, '0', 0.34, C('#bfe3ff'), { pivot: 'PIVOT_W', w: 140 });
 box('power_vs', 'power', 0, 0, 14, 14, 'icon_fight', WHITE);
 text('txt_power_e', 'power', 50, 0, '0', 0.34, C('#ffb7ad'), { pivot: 'PIVOT_E', w: 140 });
-box('power_icon_e', 'power', 62, 0, 15, 15, 'icon_sword', C('#ff8f80'));
+box('power_icon_e', 'power', 62, 0, 18, 18, 'unit_melee', C('#ff4d52'), { rot: 180 });
 
 // ---------------- BATTLE BAR ----------------
 pane('battle_bar', null, 150, 548, { yanchor: 'top', disabled: true });
@@ -90,14 +91,14 @@ box('bar_enemy', 'battle_bar', 100, 0, 100, 8, 'square', C('#ff5a4f'), { pivot: 
 box('bar_player', 'battle_bar', -100, 0, 100, 8, 'square', C('#3fa2ff'), { pivot: 'PIVOT_W' });
 pane('drum', null, 150, 46, { yanchor: 'bottom', disabled: true });
 box('drum_glow', 'drum', 0, 0, 90, 90, 'squad_glow', C('#ffb52e', 0.0));
-box('drum_icon', 'drum', 0, 4, 34, 34, 'icon_bolt', GOLD);
+box('drum_icon', 'drum', 0, 4, 36, 36, 'icon_bolt', WHITE);
 text('txt_tap', 'drum', 0, -24, 'TAP!', 0.4, GOLD);
 
 // ---------------- BOTTOM PANEL ----------------
 pane('bottom', null, 150, 48, { yanchor: 'bottom' });
 function buy_button(id, x, color, icon) {
   box(id, 'bottom', x, 0, 74, 64, 'btn', color, { slice: 22 });
-  box(id + '_icon', id, 0, 9, 32, 32, icon, WHITE);
+  box(id + '_icon', id, 0, 9, 36, 36, icon, WHITE);
   box(id + '_coin', id, -14, -17, 14, 14, 'coin');
   text(id + '_price', id, 6, -17, '10', 0.34, WHITE, { w: 120 });
   box(id + '_ad', id, -16, -17, 18, 18, 'icon_ad', WHITE, { disabled: true });
@@ -108,10 +109,10 @@ function buy_button(id, x, color, icon) {
 buy_button('btn_melee', -106, BTN_BLUE, 'icon_sword');
 buy_button('btn_archer', -28, BTN_MINT, 'icon_bow');
 box('btn_merge', 'bottom', 42, 0, 56, 56, 'btn', BTN_PURPLE, { slice: 22 });
-box('btn_merge_icon', 'btn_merge', 0, 2, 30, 30, 'icon_merge', WHITE);
+box('btn_merge_icon', 'btn_merge', 0, 2, 34, 34, 'icon_merge', WHITE);
 box('btn_merge_dot', 'btn_merge', 22, 22, 14, 14, 'dot', C('#ff4d6d'));
 box('btn_fight', 'bottom', 110, 0, 72, 64, 'btn', BTN_ORANGE, { slice: 22 });
-box('btn_fight_icon', 'btn_fight', 0, 4, 40, 40, 'icon_fight', WHITE);
+box('btn_fight_icon', 'btn_fight', 0, 4, 44, 44, 'icon_fight', WHITE);
 
 // ---------------- HINTS / TOASTS ----------------
 pane('hint', null, 150, 470, { disabled: true });
@@ -121,7 +122,7 @@ box('hand', null, 120, 120, 40, 40, 'icon_hand', WHITE, { disabled: true });
 
 pane('banner', null, 150, 420, { disabled: true });
 box('banner_bg', 'banner', 0, 0, 300, 54, 'panel', C('#2a0f19', 0.85), { slice: 14 });
-box('banner_icon', 'banner', -58, 0, 40, 40, 'icon_skull', C('#ff5a4f'));
+box('banner_icon', 'banner', -58, 0, 42, 42, 'icon_skull', C('#ff5a4f'));
 text('txt_banner', 'banner', 14, 0, 'BOSS', 0.75, C('#ffd9d4'), { w: 240 });
 
 pane('toast', null, 150, 400, { disabled: true });

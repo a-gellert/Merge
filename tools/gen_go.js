@@ -43,8 +43,8 @@ ${lines(['  x: 48.0', '  y: 32.0', '}', 'color {', `  x: ${color[0]}`, `  y: ${c
 `;
 }
 const W = (f, s) => fs.writeFileSync(f, s);
-W('melee/melee.go', script('melee', '/main/entities/melee/melee.script') + sprite('sprite', 'unit_melee', [0, 0, 0], [1, 1]));
-W('archer/archer.go', script('archer', '/main/entities/archer/archer.script') + sprite('sprite', 'unit_archer', [0, 0, 0], [1, 1]));
+W('melee/melee.go', script('melee', '/main/entities/melee/melee.script') + sprite('sprite', 'unit_melee', [0, 0, 0], [0.5, 0.5]));
+W('archer/archer.go', script('archer', '/main/entities/archer/archer.script') + sprite('sprite', 'unit_archer', [0, 0, 0], [0.5, 0.5]));
 W('projectile/projectile.go', script('projectile', '/main/entities/projectile/projectile.script') + sprite('sprite', 'arrow', [0, 0, 0], [0.55, 0.55]));
 W('visual_effect/visual_effect.go', script('visual_effect', '/main/entities/visual_effect/visual_effect.script') + sprite('sprite', 'fx_spark', [0, 0, 0], [1, 1]));
 W('grid_cell/grid_cell.go', script('grid_cell', '/main/entities/grid_cell/grid_cell.script') + sprite('sprite', 'cell', [0, 0, 0], [0.84, 0.84]));
@@ -55,9 +55,9 @@ W('bunch_controller/bunch_controller.go',
   sprite('shadow', 'squad_glow', [0, -3, -0.06], [0.95, 0.75]) +
   sprite('base_ring', 'squad_ring', [0, 0, -0.05], [0.92, 0.92]) +
   sprite('buff_ring', 'fx_ring', [0, 0, 0.12], [1.1, 1.1]) +
-  sprite('crown', 'icon_crown', [24, 20, 0.3], [0.32, 0.32]) +
+  sprite('crown', 'icon_crown', [24, 20, 0.3], [0.17, 0.17]) +
   // tier badge on the back side: below for the player, above for the enemy
-  sprite('badge', 'tier_badge', [0, -27, 0.2], [0.62, 0.62]) +
+  sprite('badge', 'tier_badge', [0, -27, 0.2], [0.31, 0.31]) +
   label('tier_label', [0, -27, 0.25], 0.36, [0.09, 0.1, 0.16]) +
-  sprite('badge_e', 'tier_badge', [0, 27, 0.2], [0.62, 0.62]) +
+  sprite('badge_e', 'tier_badge', [0, 27, 0.2], [0.31, 0.31]) +
   label('tier_label_e', [0, 27, 0.25], 0.36, [0.09, 0.1, 0.16]));

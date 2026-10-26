@@ -97,6 +97,15 @@ local function can_offer_free_ad(self)
 		and self.time >= self.free_ad_ready_at
 end
 
+-- Idle sway invites a tap while the button can be used
+local function wiggle(node, on)
+	gui.cancel_animations(node, "euler.z")
+	gui.set_rotation(node, vmath.vector3(0, 0, on and -7 or 0))
+	if on then
+		gui.animate(node, "euler.z", 7, gui.EASING_INOUTSINE, 0.55, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	end
+end
+
 local function update_buy_button(self, prefix, base_color, offer_ad)
 	local btn = N(prefix)
 	local affordable = economy.can_afford_buy()
@@ -118,6 +127,13 @@ local function update_buy_button(self, prefix, base_color, offer_ad)
 		color = COLOR_OFF
 	end
 	gui.set_color(btn, color)
+
+	local ready = offer_ad or (affordable and has_cell)
+	local key = "ready_" .. prefix
+	if ready ~= self[key] then
+		self[key] = ready
+		wiggle(N(prefix .. "_icon"), ready)
+	end
 end
 
 local function update_level_pill(self, level)
@@ -329,7 +345,9 @@ local function on_buy(self, unit_type)
 	if busy() or battle_state.get_phase() ~= config.PHASE_PREP then return end
 	if economy.can_afford_buy() then
 		local ok = battle_state.buy_unit(unit_type)
-		if not ok then
+		if ok then
+			pop(N((unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee") .. "_icon"), 1.45, 1, 0.3)
+		else
 			pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
 		end
 	elseif can_offer_free_ad(self) then

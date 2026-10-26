@@ -120,13 +120,14 @@ M.COLOR_CELL_ENEMY = vmath.vector4(0.30, 0.16, 0.12, 0.28)
 M.COLOR_CELL_MERGE = vmath.vector4(1.0, 0.85, 0.20, 0.95)
 
 -- Arena tint per chapter (cheap novelty every 10 levels)
+-- Kept subtle: the arena art is already dark on top, strong tints turn the grass grey
 M.CHAPTER_TINTS = {
 	vmath.vector4(1.00, 1.00, 1.00, 1), -- meadow
-	vmath.vector4(1.05, 0.95, 0.78, 1), -- desert
-	vmath.vector4(0.82, 0.92, 1.08, 1), -- frost
-	vmath.vector4(0.80, 0.72, 0.95, 1), -- dusk
-	vmath.vector4(1.08, 0.78, 0.68, 1), -- volcano
-	vmath.vector4(0.72, 0.95, 0.85, 1), -- jungle
+	vmath.vector4(1.03, 0.98, 0.88, 1), -- desert
+	vmath.vector4(0.92, 0.97, 1.04, 1), -- frost
+	vmath.vector4(0.92, 0.88, 0.98, 1), -- dusk
+	vmath.vector4(1.04, 0.90, 0.85, 1), -- volcano
+	vmath.vector4(0.88, 1.00, 0.93, 1), -- jungle
 }
 
 function M.get_tier_color(tier)

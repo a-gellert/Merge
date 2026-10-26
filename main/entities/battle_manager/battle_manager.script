@@ -3,7 +3,6 @@ local config = require("main.modules.config")
 local grid = require("main.modules.grid")
 local levels = require("main.modules.levels")
 local battle_state = require("main.modules.battle_state")
-local poki = require("main.modules.poki")
 
 local camera = nil
 pcall(function() camera = require("orthographic.camera") end)
@@ -13,12 +12,14 @@ local FX_POOL_SIZE = 220
 local MAX_SLASH_PER_FRAME = 5
 local MAX_COINS_PER_FRAME = 3
 local MAX_ARROW_FX_PER_FRAME = 6
+local MAX_DUST_PER_FRAME = 4
+local DUST_STEP2 = 14 * 14 -- a dust puff every 14 px of marching
 
 local action_queue = {}
 local fx_pool = {}
 local fx_cursor = 1
 local now = 0
-local frame_budget = { slash = 0, coin = 0, arrow = 0 }
+local frame_budget = { slash = 0, coin = 0, arrow = 0, dust = 0 }
 
 local GOLD = vmath.vector4(1.0, 0.84, 0.25, 1)
 local WHITE = vmath.vector4(1, 1, 1, 1)
@@ -114,7 +115,7 @@ local function coin_pop(pos, n)
 		if frame_budget.coin >= MAX_COINS_PER_FRAME then return end
 		frame_budget.coin = frame_budget.coin + 1
 		local to = vmath.vector3(pos.x + (math.random() - 0.5) * 26, pos.y + 18 + math.random() * 16, 0)
-		fx(pos, { anim = "coin", s0 = 0.35, s1 = 0.45, dur = 0.5, to = to, move_ease = go.EASING_OUTBACK, z = 0.8 })
+		fx(pos, { anim = "coin", s0 = 0.18, s1 = 0.23, dur = 0.5, to = to, move_ease = go.EASING_OUTBACK, z = 0.8 })
 	end
 end
 
@@ -209,7 +210,26 @@ EFFECTS.battle_start = function(pos)
 	shake(0.006, 0.15)
 end
 
+-- Kicked-up dust under marching squads (drawn below the warriors)
+local function dust(pos, count)
+	if frame_budget.dust >= MAX_DUST_PER_FRAME then return end
+	frame_budget.dust = frame_budget.dust + 1
+	local s = 0.5 + math.min(0.8, count / 40)
+	fx(vmath.vector3(pos.x + (math.random() - 0.5) * 14, pos.y - 8, 0), {
+		anim = "fx_puff", tint = vmath.vector4(0.92, 0.84, 0.66, 0.42),
+		s0 = s * 0.5, s1 = s * 1.4, dur = 0.5, z = -0.03,
+		to = vmath.vector3(pos.x + (math.random() - 0.5) * 20, pos.y - 2, 0),
+	})
+end
+
+local function cheer(list)
+	for _, sq in ipairs(list) do
+		if sq.is_alive and sq.go_id then msg.post(sq.go_id, "cheer") end
+	end
+end
+
 EFFECTS.victory_burst = function()
+	cheer(battle_state.get_player_squads())
 	for i = 1, 6 do
 		local p = vmath.vector3(110 + math.random() * 180, 360 + math.random() * 170, 0)
 		ring(p, GOLD, 0.2, 1.6, 0.5, i * 0.06)
@@ -218,6 +238,7 @@ EFFECTS.victory_burst = function()
 end
 
 EFFECTS.defeat_burst = function(pos)
+	cheer(battle_state.get_enemy_squads())
 	ring(pos, vmath.vector4(1, 0.3, 0.3, 0.8), 0.4, 4.0, 0.6)
 	shake(0.01, 0.25)
 end
@@ -320,6 +341,10 @@ local function make_handlers(self)
 			queue(function()
 				if reason == "remove" then
 					if go.exists(id) then go.delete(id, true) end
+				elseif reason == "merge" and sq.merge_to then
+					-- both squads get pulled into the merge cell
+					local to = vmath.vector3(sq.merge_to.x, sq.merge_to.y, 0.5)
+					delete_go(id, 0.14, to)
 				else
 					delete_go(id, reason == "dead" and 0.18 or 0.1)
 				end
@@ -327,8 +352,25 @@ local function make_handlers(self)
 		end,
 
 		update_squad = function(sq)
-			if sq.go_id then
-				msg.post(sq.go_id, "update_visual", { pos = sq.current_pos, alive_units = sq.alive_units })
+			if not sq.go_id then return end
+			-- face the current target (sprites look up at angle 0)
+			local face
+			local tgt = sq.target
+			if tgt and tgt.is_alive then
+				face = math.atan2(tgt.current_pos.y - sq.current_pos.y, tgt.current_pos.x - sq.current_pos.x) - math.pi * 0.5
+			end
+			msg.post(sq.go_id, "update_visual", { pos = sq.current_pos, alive_units = sq.alive_units, face = face })
+
+			local p = sq.current_pos
+			if sq.dust_x then
+				local dx, dy = p.x - sq.dust_x, p.y - sq.dust_y
+				if dx * dx + dy * dy > DUST_STEP2 then
+					sq.dust_x, sq.dust_y = p.x, p.y
+					local at, n = vmath.vector3(p), sq.alive_units
+					queue(function() dust(at, n) end)
+				end
+			else
+				sq.dust_x, sq.dust_y = p.x, p.y
 			end
 		end,
 
@@ -354,8 +396,10 @@ local function make_handlers(self)
 
 		attack_squad = function(sq, tgt)
 			if sq.go_id then msg.post(sq.go_id, "attack", { target_pos = tgt.current_pos }) end
-			local from, to = vmath.vector3(sq.current_pos), vmath.vector3(tgt.current_pos)
-			queue(function() EFFECTS.slash(from, to) end)
+			if sq.unit_type == config.UNIT_MELEE then
+				local from, to = vmath.vector3(sq.current_pos), vmath.vector3(tgt.current_pos)
+				queue(function() EFFECTS.slash(from, to) end)
+			end
 		end,
 
 		squad_buff = function(sq, buff, on)
@@ -472,8 +516,7 @@ end
 
 function update(self, dt)
 	now = now + dt
-	frame_budget.slash, frame_budget.coin, frame_budget.arrow = 0, 0, 0
-	poki.update(dt)
+	frame_budget.slash, frame_budget.coin, frame_budget.arrow, frame_budget.dust = 0, 0, 0, 0
 	process_queue()
 	battle_state.update_battle(dt)
 	if self.autoplay then

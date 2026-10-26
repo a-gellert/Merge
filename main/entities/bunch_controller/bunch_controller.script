@@ -4,11 +4,20 @@ local config = require("main.modules.config")
 
 local WHITE = vmath.vector4(1, 1, 1, 1)
 local SHADOW = vmath.vector4(0, 0, 0, 0.32)
-local GOLD = vmath.vector4(1.0, 0.82, 0.2, 1)
-local MAX_LURCHERS = 14 -- warriors animated per strike (keeps big crowds cheap)
+local MAX_LURCHERS = 14  -- warriors animated per strike (keeps big crowds cheap)
+local TURN_SPEED = 7     -- how fast a squad turns towards its target (1/s)
+local FLASH_COOLDOWN = 0.35 -- hits arrive every frame in big fights; keep team colors readable
+local DEG = 180 / math.pi
 
 local function sprite_url(id)
 	return msg.url(nil, id, "sprite")
+end
+
+-- Shortest signed difference between two angles
+local function angle_delta(from, to)
+	local d = (to - from) % (2 * math.pi)
+	if d > math.pi then d = d - 2 * math.pi end
+	return d
 end
 
 local function set_badge_visible(self, visible)
@@ -25,6 +34,18 @@ local function clear_warriors(self)
 		if go.exists(w.id) then go.delete(w.id) end
 	end
 	self.warriors = {}
+end
+
+-- Warrior offset rotated by the squad's current turn (formation turns as a whole)
+local function turned(self, x, y)
+	local c, s = self.turn_cos, self.turn_sin
+	return x * c - y * s, x * s + y * c
+end
+
+local function set_turn(self, face)
+	self.face = face
+	local t = face - self.base_rot
+	self.turn_cos, self.turn_sin = math.cos(t), math.sin(t)
 end
 
 local function setup_visuals(self, data)
@@ -52,12 +73,7 @@ local function setup_visuals(self, data)
 	go.set("#tier_label_e", "text", tostring(self.tier))
 	set_badge_visible(self, true)
 	msg.post("#buff_ring", "disable")
-	if self.is_boss then
-		msg.post("#crown", "enable")
-		go.set("#crown", "tint", GOLD)
-	else
-		msg.post("#crown", "disable")
-	end
+	msg.post("#crown", self.is_boss and "enable" or "disable")
 
 	local count = data.unit_count or config.get_unit_count(self.tier)
 	local offsets = config.get_formation_offsets(count)
@@ -68,19 +84,20 @@ local function setup_visuals(self, data)
 	end
 	self.warrior_scale = vmath.vector3(scale, scale, 1)
 	self.base_rot = is_enemy and math.pi or 0
+	set_turn(self, self.base_rot)
+	self.face_target = self.base_rot
 	local flip = is_enemy and -1 or 1
 
 	local factory_url = (data.unit_type == config.UNIT_ARCHER) and "#archer_factory" or "#melee_factory"
 	local my_id = go.get_id()
+	local base_q = vmath.quat_rotation_z(self.base_rot)
 	for i = 1, #offsets do
 		local o = offsets[i]
 		local off = vmath.vector3(o.x, o.y * flip, o.z)
 		local w_id = factory.create(factory_url, nil, nil, nil, self.warrior_scale)
 		go.set_parent(w_id, my_id, false)
-		go.set_position(off, w_id)
-		go.set_rotation(vmath.quat_rotation_z(self.base_rot), w_id)
-		go.set(sprite_url(w_id), "tint", self.base_tint)
-		table.insert(self.warriors, {
+		go.set_rotation(base_q, w_id)
+		local w = {
 			id = w_id,
 			url = sprite_url(w_id),
 			base_offset = off,
@@ -89,7 +106,21 @@ local function setup_visuals(self, data)
 			alive = true,
 			chaos = 0.8 + math.random() * 0.9,
 			flank = (o.x > 2 and 1) or (o.x < -2 and -1) or 0,
-		})
+			busy_until = 0,
+		}
+		go.set(w.url, "tint", self.base_tint)
+		-- Juicy entrance: merge bursts out of the center, a fresh squad pops in one by one
+		local delay = math.min(0.35, (i - 1) * 0.018)
+		if data.is_merge then
+			go.set_position(vmath.vector3(0, 0, off.z), w_id)
+			go.animate(w_id, "position", go.PLAYBACK_ONCE_FORWARD, off, go.EASING_OUTBACK, 0.32, delay * 0.5)
+		else
+			go.set_position(off, w_id)
+			go.set_scale(vmath.vector3(0.01, 0.01, 1), w_id)
+			go.animate(w_id, "scale", go.PLAYBACK_ONCE_FORWARD, self.warrior_scale, go.EASING_OUTBACK, 0.24, delay)
+		end
+		w.busy_until = self.time + delay + 0.34
+		table.insert(self.warriors, w)
 	end
 	self.alive_count = #self.warriors
 
@@ -104,12 +135,10 @@ local function setup_visuals(self, data)
 		go.set_scale(vmath.vector3(1.45, 0.6, 1))
 		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_OUTELASTIC, 0.5)
 	else
-		go.set_scale(vmath.vector3(0.2, 0.2, 1))
+		go.set_scale(vmath.vector3(0.6, 0.6, 1))
 		go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_OUTBACK, 0.28)
 	end
 end
-
-local FLASH_COOLDOWN = 0.35 -- hits arrive every frame in big fights; keep team colors readable
 
 local function flash(self, tint, duration)
 	if self.flash_timer > 0 or self.flash_cd > 0 then return end
@@ -125,14 +154,16 @@ local function kill_warrior(self, w)
 	if not w.alive then return end
 	w.alive = false
 	if not go.exists(w.id) then return end
-	-- Fling backwards with a spin and fade out
-	local back = (self.team == config.TEAM_PLAYER) and -1 or 1
+	-- Fling backwards (away from the facing direction) with a spin and fade out
+	local bx, by = math.sin(self.face), -math.cos(self.face)
 	local p = go.get_position(w.id)
-	local target = vmath.vector3(p.x + (math.random() - 0.5) * 22, p.y + back * (8 + math.random() * 14), p.z)
+	local push = 8 + math.random() * 14
+	local target = vmath.vector3(p.x + bx * push + (math.random() - 0.5) * 18, p.y + by * push + (math.random() - 0.5) * 18, p.z)
 	go.cancel_animations(w.id, "position")
+	go.cancel_animations(w.id, "scale")
 	go.animate(w.id, "position", go.PLAYBACK_ONCE_FORWARD, target, go.EASING_OUTQUAD, 0.32)
-	go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_FORWARD, (math.random() > 0.5 and 1 or -1) * 300, go.EASING_OUTQUAD, 0.32)
-	go.set(w.url, "tint", vmath.vector4(1, 1, 1, 1))
+	go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_FORWARD, self.face * DEG + (math.random() > 0.5 and 1 or -1) * 300, go.EASING_OUTQUAD, 0.32)
+	go.set(w.url, "tint", WHITE)
 	go.animate(w.url, "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.3, 0.3, 0.35, 0), go.EASING_INQUAD, 0.32, 0, function()
 		if not w.alive and go.exists(w.id) then
 			msg.post(w.id, "disable")
@@ -140,20 +171,24 @@ local function kill_warrior(self, w)
 	end)
 end
 
-local function revive_warrior(self, w)
+local function revive_warrior(self, w, delay)
 	w.alive = true
 	if not go.exists(w.id) then return end
 	go.cancel_animations(w.id, "position")
 	go.cancel_animations(w.id, "euler.z")
+	go.cancel_animations(w.id, "scale")
 	go.cancel_animations(w.url, "tint")
 	msg.post(w.id, "enable")
 	go.set(w.url, "tint", self.base_tint)
 	go.set_position(w.base_offset, w.id)
 	go.set_rotation(vmath.quat_rotation_z(self.base_rot), w.id)
 	go.set_scale(vmath.vector3(0.01, 0.01, 1), w.id)
-	go.animate(w.id, "scale", go.PLAYBACK_ONCE_FORWARD, self.warrior_scale, go.EASING_OUTBACK, 0.25)
+	go.animate(w.id, "scale", go.PLAYBACK_ONCE_FORWARD, self.warrior_scale, go.EASING_OUTBACK, 0.25, delay)
+	w.busy_until = self.time + delay + 0.27
+	w.rot = nil
 end
 
+-- Level start: everyone falls back in line, facing the enemy field again
 local function replenish_all(self, data)
 	local pos = data and (data.pos or data.home_pos)
 	go.cancel_animations(".", "position")
@@ -164,14 +199,28 @@ local function replenish_all(self, data)
 	end
 	go.set_scale(vmath.vector3(1, 1, 1))
 	self.is_moving = false
+	self.face_target = self.base_rot
+	set_turn(self, self.base_rot)
+
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
+		local delay = math.min(0.3, (i - 1) * 0.012)
 		if not w.alive then
-			revive_warrior(self, w)
+			revive_warrior(self, w, delay)
 		elseif go.exists(w.id) then
+			go.cancel_animations(w.id, "position")
+			go.cancel_animations(w.id, "euler.z")
+			go.cancel_animations(w.id, "scale")
 			go.set(w.url, "tint", self.base_tint)
-			go.set_position(w.base_offset, w.id)
-			go.set_rotation(vmath.quat_rotation_z(self.base_rot), w.id)
+			go.set_scale(self.warrior_scale, w.id)
+			-- shortest way back to the base heading
+			local cur = go.get(w.id, "euler.z")
+			local back = cur + angle_delta(cur / DEG, self.base_rot) * DEG
+			go.set(w.id, "euler.z", cur)
+			go.animate(w.id, "position", go.PLAYBACK_ONCE_FORWARD, w.base_offset, go.EASING_OUTBACK, 0.3, delay)
+			go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_FORWARD, back, go.EASING_OUTQUAD, 0.25, delay)
+			w.busy_until = self.time + delay + 0.32
+			w.rot = nil
 		end
 	end
 	self.alive_count = #self.warriors
@@ -188,6 +237,9 @@ local function update_combat_visuals(self, data)
 		self.is_moving = (dx * dx + dy * dy) > 0.02
 		self.last_pos = vmath.vector3(data.pos)
 		go.set_position(vmath.vector3(data.pos.x, data.pos.y, 0))
+	end
+	if data.face then
+		self.face_target = data.face
 	end
 
 	if not self.in_battle then
@@ -207,26 +259,46 @@ local function update_combat_visuals(self, data)
 	end
 end
 
-local function play_attack_lurch(self, target_pos)
+-- Melee: front ranks lunge with a squash & stretch. Archers: a short recoil.
+local function play_attack(self, target_pos)
 	local my_pos = go.get_position()
 	local dx, dy = target_pos.x - my_pos.x, target_pos.y - my_pos.y
 	local dist = math.sqrt(dx * dx + dy * dy)
 	if dist <= 0.1 then return end
 	dx, dy = dx / dist, dy / dist
+	local archer = (self.unit_type == config.UNIT_ARCHER)
+	local ws = self.warrior_scale
+	local stretch = vmath.vector3(ws.x * 0.82, ws.y * 1.28, 1)
 
 	local n = 0
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
-		if w.alive and math.random() < 0.6 then
+		if w.alive and self.time >= w.busy_until and math.random() < (archer and 0.35 or 0.6) then
 			n = n + 1
-			local b = w.base_offset
-			local lunge = 5 + math.random() * 5
-			local to = vmath.vector3(b.x + dx * lunge, b.y + dy * lunge, b.z)
-			w.lunging = true
-			go.animate(w.id, "position", go.PLAYBACK_ONCE_PINGPONG, to, go.EASING_OUTQUAD, 0.16, (i % 4) * 0.03, function()
-				w.lunging = false
-			end)
+			local p = go.get_position(w.id)
+			local lunge = archer and -2.5 or (5 + math.random() * 5)
+			local to = vmath.vector3(p.x + dx * lunge, p.y + dy * lunge, p.z)
+			local delay = (i % 4) * 0.03
+			local dur = archer and 0.1 or 0.16
+			go.animate(w.id, "position", go.PLAYBACK_ONCE_PINGPONG, to, go.EASING_OUTQUAD, dur, delay)
+			go.animate(w.id, "scale", go.PLAYBACK_ONCE_PINGPONG, archer and vmath.vector3(ws.x * 1.15, ws.y * 0.85, 1) or stretch, go.EASING_OUTQUAD, dur, delay)
+			w.busy_until = self.time + delay + dur * 2 + 0.01
 			if n >= MAX_LURCHERS then break end
+		end
+	end
+end
+
+-- Winners jump for joy
+local function cheer(self)
+	for i = 1, #self.warriors do
+		local w = self.warriors[i]
+		if w.alive and go.exists(w.id) then
+			local p = go.get_position(w.id)
+			local delay = math.random() * 0.25
+			go.cancel_animations(w.id, "position")
+			go.animate(w.id, "position.y", go.PLAYBACK_ONCE_PINGPONG, p.y + 6 + math.random() * 4, go.EASING_OUTQUAD, 0.22, delay)
+			go.animate(w.id, "scale", go.PLAYBACK_ONCE_PINGPONG, vmath.vector3(self.warrior_scale.x * 0.85, self.warrior_scale.y * 1.2, 1), go.EASING_OUTQUAD, 0.22, delay)
+			w.busy_until = self.time + delay + 0.46
 		end
 	end
 end
@@ -269,6 +341,9 @@ function init(self)
 	self.is_moving = false
 	self.flash_timer = 0
 	self.flash_cd = 0
+	self.base_rot = 0
+	self.face_target = 0
+	set_turn(self, 0)
 	msg.post("#buff_ring", "disable")
 	msg.post("#crown", "disable")
 end
@@ -291,30 +366,35 @@ function update(self, dt)
 		end
 	end
 
+	-- Turn smoothly towards the target
+	local d = angle_delta(self.face, self.face_target)
+	if math.abs(d) > 0.001 then
+		set_turn(self, self.face + d * math.min(1, dt * TURN_SPEED))
+	end
+
 	local fwd = (self.team == config.TEAM_PLAYER) and 1 or -1
 	local t = self.time
-	-- Rotation only changes while marching; reset it once when the squad stops
-	local reset_rot = (not self.is_moving) and self.was_moving
-	self.was_moving = self.is_moving
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
-		if w.alive and not w.lunging then
+		if w.alive and t >= w.busy_until then
 			local b = w.base_offset
-			local ox, oy, rot
+			local lx, ly, wobble
 			if self.is_moving then
 				-- Marching crowd: bounce, waddle, spread to the flanks, vanguard surges ahead
 				local step = math.sin(t * 15 + w.phase)
-				ox = b.x + w.flank * 3 + math.sin(t * 9 + w.phase) * w.chaos
-				oy = b.y + fwd * 3 + math.abs(step) * 2.2 + math.cos(t * 10 + w.phase) * w.chaos
-				rot = self.base_rot + step * 0.18
+				lx = b.x + w.flank * 3 + math.sin(t * 9 + w.phase) * w.chaos
+				ly = b.y + fwd * 3 + math.abs(step) * 2.2 + math.cos(t * 10 + w.phase) * w.chaos
+				wobble = step * 0.18
 			else
-				ox = b.x + math.cos(t * w.speed * 0.8 + w.phase) * 0.4
-				oy = b.y + math.sin(t * w.speed + w.phase) * 0.7
-				rot = reset_rot and self.base_rot or nil
+				lx = b.x + math.cos(t * w.speed * 0.8 + w.phase) * 0.4
+				ly = b.y + math.sin(t * w.speed + w.phase) * 0.7
 			end
-			go.set_position(vmath.vector3(ox, oy, b.z), w.id)
-			if rot then
-				go.set_rotation(vmath.quat_rotation_z(rot), w.id)
+			local x, y = turned(self, lx, ly)
+			go.set_position(vmath.vector3(x, y, b.z), w.id)
+			-- rotation is only pushed when it changes (marching waddle or turning)
+			if wobble or w.rot ~= self.face then
+				go.set_rotation(vmath.quat_rotation_z(self.face + (wobble or 0)), w.id)
+				w.rot = (not wobble) and self.face or nil
 			end
 		end
 	end
@@ -332,7 +412,9 @@ function on_message(self, message_id, message, sender)
 		local c = self.base_tint
 		flash(self, vmath.vector4(c.x + (1 - c.x) * 0.55, c.y + (1 - c.y) * 0.55, c.z + (1 - c.z) * 0.55, 1), 0.05)
 	elseif message_id == hash("attack") then
-		play_attack_lurch(self, message.target_pos)
+		play_attack(self, message.target_pos)
+	elseif message_id == hash("cheer") then
+		cheer(self)
 	elseif message_id == hash("snap") then
 		local pos = message.pos
 		go.cancel_animations(".", "position")

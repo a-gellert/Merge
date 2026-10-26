@@ -28,7 +28,7 @@
 - **Economy**: shop sells tier `best_tier - 3`; price grows 18% per purchase inside a level; kill coins are kept on defeat.
 - **Progression**: procedural 300-level campaign on a two-level sawtooth curve (`levels.lua`), endless afterwards. Tune only with `tools/balance_sim.lua`.
 - **Flow**: no victory/defeat screens: a win starts the next level, a loss restarts the level (`battle_state.finish_battle`).
-- **Monetization**: rewarded free squad on the buy buttons when broke; interstitials only at the post-battle transition (`poki.level_break`).
+- **Monetization**: rewarded free squad on the buy buttons when broke; interstitial every 5 finished rounds (wins and losses), at the post-battle transition (`poki.level_break`, `ROUNDS_PER_BREAK`).
 - **Tutorial (Level 1)**: Hand FSM: Buy (melee) -> Merge -> Fight.
 - **Full design, balance tables, tools and change log**: [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md).
 

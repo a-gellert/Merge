@@ -634,6 +634,8 @@ function M.merge_units(from_r, from_c, to_r, to_c)
 	grid.set_player_squad(to_r, to_c, nil)
 	a.is_alive = false
 	b.is_alive = false
+	a.merge_to = vmath.vector3(b.home_pos)
+	b.merge_to = a.merge_to
 	view("despawn_squad", a, "merge")
 	view("despawn_squad", b, "merge")
 	remove_player_squad(a)
@@ -922,7 +924,7 @@ local function finish_battle(win)
 	end
 	M.save_game()
 	-- Natural break for an interstitial, then straight into the next (or same) level
-	poki.level_break(current_level, function()
+	poki.level_break(function()
 		if win then M.claim_victory() else M.retry() end
 	end)
 end
@@ -1010,6 +1012,7 @@ function M.update_battle(real_dt)
 										squad.current_pos.x + u.offset.x,
 										squad.current_pos.y + u.offset.y,
 										tgt, unit_dmg, squad.miss_radius, squad.has_fire, squad.team)
+									swung = true
 								else
 									M.apply_damage(tgt, unit_dmg)
 									swung = true

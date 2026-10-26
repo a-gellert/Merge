@@ -90,8 +90,8 @@ embedded_components {
     z: 0.3
   }
   scale {
-    x: 0.32
-    y: 0.32
+    x: 0.17
+    y: 0.17
   }
 }
 embedded_components {
@@ -110,8 +110,8 @@ embedded_components {
     z: 0.2
   }
   scale {
-    x: 0.62
-    y: 0.62
+    x: 0.31
+    y: 0.31
   }
 }
 embedded_components {
@@ -161,8 +161,8 @@ embedded_components {
     z: 0.2
   }
   scale {
-    x: 0.62
-    y: 0.62
+    x: 0.31
+    y: 0.31
   }
 }
 embedded_components {

@@ -4,21 +4,14 @@ local M = {}
 
 local is_gameplay_active = false
 local is_ad_active = false
-local levels_since_break = 0
-local last_rewarded_time = -1000
-local clock = 0
+local rounds_since_break = 0
 
--- Interstitials: never before this level, and at most every N finished levels.
+-- Interstitial once every N finished rounds (wins and losses count the same).
 -- Poki additionally throttles commercial breaks on its side.
-M.FIRST_BREAK_LEVEL = 4
-M.LEVELS_PER_BREAK = 2
+M.ROUNDS_PER_BREAK = 5
 
 local function sdk()
 	return rawget(_G, "poki_sdk")
-end
-
-function M.update(dt)
-	clock = clock + dt
 end
 
 function M.is_ad_active()
@@ -52,15 +45,14 @@ function M.measure(category, what, action)
 	end
 end
 
--- Natural break between levels. Skipped early and right after a rewarded ad.
-function M.level_break(level, on_complete)
-	levels_since_break = levels_since_break + 1
-	local recently_rewarded = (clock - last_rewarded_time) < 60
-	if level < M.FIRST_BREAK_LEVEL or levels_since_break < M.LEVELS_PER_BREAK or recently_rewarded then
+-- Natural break after every finished round; a commercial every ROUNDS_PER_BREAK rounds
+function M.level_break(on_complete)
+	rounds_since_break = rounds_since_break + 1
+	if rounds_since_break < M.ROUNDS_PER_BREAK then
 		if on_complete then on_complete() end
 		return
 	end
-	levels_since_break = 0
+	rounds_since_break = 0
 	M.commercial_break(on_complete)
 end
 
@@ -88,7 +80,6 @@ end
 function M.rewarded_break(size, on_reward)
 	local s = sdk()
 	if not (s and s.rewarded_break) then
-		last_rewarded_time = clock
 		if on_reward then on_reward(true) end
 		return
 	end
@@ -101,9 +92,7 @@ function M.rewarded_break(size, on_reward)
 		elseif not done then
 			done = true
 			is_ad_active = false
-			local ok = (status == s.REWARDED_BREAK_SUCCESS)
-			if ok then last_rewarded_time = clock end
-			if on_reward then on_reward(ok) end
+			if on_reward then on_reward(status == s.REWARDED_BREAK_SUCCESS) end
 		end
 	end)
 end
