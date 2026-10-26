@@ -44,13 +44,11 @@ embedded_components {
   ""
   position {
     x: 200.0
-    y: 337.5
+    y: 320.5
     z: -0.45
   }
   scale {
-    x: 1.0
-    y: 1.0
-    z: 1.0
+    x: 0.5
+    y: 0.5
   }
 }
-
