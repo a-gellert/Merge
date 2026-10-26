@@ -4,873 +4,1615 @@ fonts {
   font: "/druid/fonts/druid_text_bold.font"
 }
 textures {
-  name: "druid"
-  texture: "/druid/druid.atlas"
+  name: "game"
+  texture: "/main/assets/game.atlas"
 }
 nodes {
   position {
-    x: 58.0
-    y: 566.0
+    x: 150
+    y: 578
   }
   size {
-    x: 96.0
-    y: 36.0
+    x: 0
+    y: 0
   }
   color {
-    x: 0.09
-    y: 0.13
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "top"
+  yanchor: YANCHOR_TOP
+  inherit_alpha: true
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: -96
+    y: 0
+  }
+  size {
+    x: 96
+    y: 30
+  }
+  color {
+    x: 0.114
+    y: 0.133
     z: 0.22
   }
   type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "coin_container"
+  texture: "game/panel"
+  id: "coin_pill"
+  parent: "top"
   inherit_alpha: true
   slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
+    x: 14
+    y: 14
+    z: 14
+    w: 14
   }
+  alpha: 0.82
 }
 nodes {
   position {
-    x: -26.0
+    x: -34
+    y: 0
   }
   size {
-    x: 18.0
-    y: 18.0
+    x: 26
+    y: 26
   }
   color {
-    y: 0.82
-    z: 0.15
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_BOX
-  texture: "druid/ui_circle_16"
+  texture: "game/coin"
   id: "icon_coin"
-  parent: "coin_container"
+  parent: "coin_pill"
   inherit_alpha: true
-  alpha: 0.75
 }
 nodes {
   position {
-    x: 12.0
+    x: 10
+    y: 0
   }
   scale {
-    x: 0.6
-    y: 0.6
+    x: 0.42
+    y: 0.42
+    z: 1
   }
   size {
-    x: 65.0
-    y: 30.0
+    x: 150
+    y: 50
   }
   color {
-    y: 0.88
-    z: 0.25
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_TEXT
-  text: "60"
+  text: "0"
   font: "druid_text_bold"
   id: "txt_coins"
-  parent: "coin_container"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "coin_pill"
   inherit_alpha: true
-  alpha: 0.75
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
 }
 nodes {
   position {
-    x: 242.0
-    y: 566.0
+    x: 52
+    y: 0
   }
   size {
-    x: 88.0
-    y: 36.0
+    x: 186
+    y: 30
   }
   color {
-    x: 0.09
-    y: 0.13
+    x: 0.114
+    y: 0.133
     z: 0.22
   }
   type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "level_container"
+  texture: "game/panel"
+  id: "level_pill"
+  parent: "top"
   inherit_alpha: true
   slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
+    x: 14
+    y: 14
+    z: 14
+    w: 14
   }
+  alpha: 0.82
 }
 nodes {
+  position {
+    x: -76
+    y: 0
+  }
   scale {
-    x: 0.3
-    y: 0.3
+    x: 0.42
+    y: 0.42
+    z: 1
   }
   size {
-    x: 130.0
-    y: 30.0
+    x: 70
+    y: 50
   }
   color {
-    x: 0.9
-    y: 0.93
-    z: 0.98
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_TEXT
-  text: "\320\243\320\240\320\236\320\222\320\225\320\235\320\254 99"
+  text: "1"
   font: "druid_text_bold"
   id: "txt_level"
-  parent: "level_container"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "level_pill"
   inherit_alpha: true
-  alpha: 0.75
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
 }
 nodes {
   position {
-    x: 150.0
-    y: 46.0
+    x: -52
+    y: 0
   }
   size {
-    x: 300.0
-    y: 70.0
+    x: 9
+    y: 9
   }
   color {
-    x: 0.3019608
-    y: 0.4
-    z: 0.8
+    x: 0.365
+    y: 0.388
+    z: 0.518
   }
   type: TYPE_BOX
-  id: "panel_bottom"
+  texture: "game/dot"
+  id: "dot_1"
+  parent: "level_pill"
   inherit_alpha: true
-  alpha: 0.5
-  visible: false
 }
 nodes {
   position {
-    x: -110.0
+    x: -37.5
+    y: 0
   }
   size {
-    x: 68.0
-    y: 52.0
+    x: 9
+    y: 9
   }
   color {
-    x: 0.9019608
-    y: 0.9019608
-    z: 0.3019608
+    x: 0.365
+    y: 0.388
+    z: 0.518
   }
   type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_buy"
-  parent: "panel_bottom"
+  texture: "game/dot"
+  id: "dot_2"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -23
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_3"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -8.5
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_4"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 6
+    y: 0
+  }
+  size {
+    x: 14
+    y: 14
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/icon_skull"
+  id: "dot_5"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 20.5
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_6"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 35
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_7"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 49.5
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_8"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 64
+    y: 0
+  }
+  size {
+    x: 9
+    y: 9
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "dot_9"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 81.5
+    y: 0
+  }
+  size {
+    x: 22
+    y: 22
+  }
+  color {
+    x: 0.365
+    y: 0.388
+    z: 0.518
+  }
+  type: TYPE_BOX
+  texture: "game/icon_skull"
+  id: "dot_10"
+  parent: "level_pill"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150
+    y: 322
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "power"
+  inherit_alpha: true
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 150
+    y: 22
+  }
+  color {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  type: TYPE_BOX
+  texture: "game/panel"
+  id: "power_bg"
+  parent: "power"
+  inherit_alpha: true
   slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
+    x: 10
+    y: 10
+    z: 10
+    w: 10
+  }
+  alpha: 0.72
+}
+nodes {
+  position {
+    x: -62
+    y: 0
+  }
+  size {
+    x: 15
+    y: 15
+  }
+  color {
+    x: 0.486
+    y: 0.769
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_sword"
+  id: "power_icon_p"
+  parent: "power"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -50
+    y: 0
+  }
+  scale {
+    x: 0.34
+    y: 0.34
+    z: 1
+  }
+  size {
+    x: 140
+    y: 50
+  }
+  color {
+    x: 0.749
+    y: 0.89
+    z: 1
+  }
+  type: TYPE_TEXT
+  text: "0"
+  font: "druid_text_bold"
+  id: "txt_power_p"
+  pivot: PIVOT_W
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "power"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 14
+    y: 14
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_fight"
+  id: "power_vs"
+  parent: "power"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 50
+    y: 0
+  }
+  scale {
+    x: 0.34
+    y: 0.34
+    z: 1
+  }
+  size {
+    x: 140
+    y: 50
+  }
+  color {
+    x: 1
+    y: 0.718
+    z: 0.678
+  }
+  type: TYPE_TEXT
+  text: "0"
+  font: "druid_text_bold"
+  id: "txt_power_e"
+  pivot: PIVOT_E
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "power"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 62
+    y: 0
+  }
+  size {
+    x: 15
+    y: 15
+  }
+  color {
+    x: 1
+    y: 0.561
+    z: 0.502
+  }
+  type: TYPE_BOX
+  texture: "game/icon_sword"
+  id: "power_icon_e"
+  parent: "power"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150
+    y: 548
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "battle_bar"
+  yanchor: YANCHOR_TOP
+  inherit_alpha: true
+  enabled: false
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 204
+    y: 12
+  }
+  color {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  type: TYPE_BOX
+  texture: "game/square"
+  id: "bar_bg"
+  parent: "battle_bar"
+  inherit_alpha: true
+  alpha: 0.8
+}
+nodes {
+  position {
+    x: 100
+    y: 0
+  }
+  size {
+    x: 100
+    y: 8
+  }
+  color {
+    x: 1
+    y: 0.353
+    z: 0.31
+  }
+  type: TYPE_BOX
+  texture: "game/square"
+  id: "bar_enemy"
+  pivot: PIVOT_E
+  parent: "battle_bar"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -100
+    y: 0
+  }
+  size {
+    x: 100
+    y: 8
+  }
+  color {
+    x: 0.247
+    y: 0.635
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/square"
+  id: "bar_player"
+  pivot: PIVOT_W
+  parent: "battle_bar"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150
+    y: 46
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "drum"
+  yanchor: YANCHOR_BOTTOM
+  inherit_alpha: true
+  enabled: false
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 90
+    y: 90
+  }
+  color {
+    x: 1
+    y: 0.71
+    z: 0.18
+  }
+  type: TYPE_BOX
+  texture: "game/squad_glow"
+  id: "drum_glow"
+  parent: "drum"
+  inherit_alpha: true
+  alpha: 0
+}
+nodes {
+  position {
+    x: 0
+    y: 4
+  }
+  size {
+    x: 34
+    y: 34
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
+  }
+  type: TYPE_BOX
+  texture: "game/icon_bolt"
+  id: "drum_icon"
+  parent: "drum"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 0
+    y: -24
+  }
+  scale {
+    x: 0.4
+    y: 0.4
+    z: 1
+  }
+  size {
+    x: 200
+    y: 50
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
+  }
+  type: TYPE_TEXT
+  text: "TAP!"
+  font: "druid_text_bold"
+  id: "txt_tap"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "drum"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 150
+    y: 48
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "bottom"
+  yanchor: YANCHOR_BOTTOM
+  inherit_alpha: true
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: -106
+    y: 0
+  }
+  size {
+    x: 74
+    y: 64
+  }
+  color {
+    x: 0.227
+    y: 0.553
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/btn"
+  id: "btn_melee"
+  parent: "bottom"
+  inherit_alpha: true
+  slice9 {
+    x: 22
+    y: 22
+    z: 22
+    w: 22
   }
 }
 nodes {
   position {
-    x: -32.0
+    x: 0
+    y: 9
   }
   size {
-    x: 14.0
-    y: 14.0
+    x: 32
+    y: 32
   }
   color {
-    x: 0.85
-    y: 0.92
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_BOX
-  texture: "druid/ui_circle_16"
-  id: "icon_buy_unit"
-  parent: "btn_buy"
+  texture: "game/icon_sword"
+  id: "btn_melee_icon"
+  parent: "btn_melee"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -14
+    y: -17
+  }
+  size {
+    x: 14
+    y: 14
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/coin"
+  id: "btn_melee_coin"
+  parent: "btn_melee"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 6
+    y: -17
+  }
+  scale {
+    x: 0.34
+    y: 0.34
+    z: 1
+  }
+  size {
+    x: 120
+    y: 50
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_TEXT
+  text: "10"
+  font: "druid_text_bold"
+  id: "btn_melee_price"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "btn_melee"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: -16
+    y: -17
+  }
+  size {
+    x: 18
+    y: 18
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_ad"
+  id: "btn_melee_ad"
+  parent: "btn_melee"
   inherit_alpha: true
   enabled: false
 }
 nodes {
   position {
-    y: 11.0
-  }
-  size {
-    x: 13.0
-    y: 13.0
-  }
-  color {
-    y: 0.82
-    z: 0.15
-  }
-  type: TYPE_BOX
-  texture: "druid/ui_circle_16"
-  id: "icon_buy_coin"
-  parent: "btn_buy"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    y: -10.0
+    x: 8
+    y: -17
   }
   scale {
-    x: 0.26
-    y: 0.26
+    x: 0.3
+    y: 0.3
+    z: 1
   }
   size {
-    x: 130.0
-    y: 50.0
-  }
-  type: TYPE_TEXT
-  text: "\320\232\320\243\320\237\320\230\320\242\320\254 100"
-  font: "druid_text_bold"
-  id: "txt_buy"
-  parent: "btn_buy"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    x: -37.0
-  }
-  size {
-    x: 66.0
-    y: 52.0
+    x: 120
+    y: 50
   }
   color {
-    x: 0.52
-    y: 0.22
-    z: 0.82
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_merge"
-  parent: "panel_bottom"
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
-}
-nodes {
-  position {
-    x: -5.0
-    y: 11.0
-  }
-  size {
-    x: 9.0
-    y: 9.0
-  }
-  color {
-    y: 0.85
-    z: 0.2
-  }
-  type: TYPE_BOX
-  texture: "druid/ui_circle_16"
-  id: "icon_merge_left"
-  parent: "btn_merge"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    x: 5.0
-    y: 11.0
-  }
-  size {
-    x: 9.0
-    y: 9.0
-  }
-  color {
-    y: 0.85
-    z: 0.2
-  }
-  type: TYPE_BOX
-  texture: "druid/ui_circle_16"
-  id: "icon_merge_right"
-  parent: "btn_merge"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    y: 11.0
-  }
-  size {
-    x: 8.0
-    y: 8.0
-  }
-  type: TYPE_BOX
-  texture: "druid/icon_arrow"
-  id: "icon_merge_arrow"
-  parent: "btn_merge"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    y: -10.0
-  }
-  scale {
-    x: 0.32
-    y: 0.32
-  }
-  size {
-    x: 100.0
-    y: 40.0
-  }
-  type: TYPE_TEXT
-  text: "AUTO"
-  font: "druid_text_bold"
-  id: "txt_merge"
-  parent: "btn_merge"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    x: 37.0
-  }
-  size {
-    x: 66.0
-    y: 52.0
-  }
-  color {
-    x: 0.12
-    y: 0.52
-    z: 0.32
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_reward"
-  parent: "panel_bottom"
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
-}
-nodes {
-  position {
-    y: 11.0
-  }
-  size {
-    x: 13.0
-    y: 13.0
-  }
-  color {
-    x: 0.98
-    y: 0.85
-    z: 0.2
-  }
-  type: TYPE_BOX
-  texture: "druid/icon_arrow"
-  id: "icon_reward"
-  parent: "btn_reward"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    y: -10.0
-  }
-  scale {
-    x: 0.35
-    y: 0.35
-  }
-  size {
-    x: 100.0
-    y: 40.0
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_TEXT
   text: "FREE"
   font: "druid_text_bold"
-  id: "txt_reward"
-  parent: "btn_reward"
+  id: "btn_melee_free"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "btn_melee"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+  enabled: false
+}
+nodes {
+  position {
+    x: 26
+    y: 22
+  }
+  size {
+    x: 20
+    y: 20
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/tier_badge"
+  id: "btn_melee_badge"
+  parent: "btn_melee"
   inherit_alpha: true
 }
 nodes {
   position {
-    x: 110.0
+    x: 0
+    y: 0
+  }
+  scale {
+    x: 0.28
+    y: 0.28
+    z: 1
   }
   size {
-    x: 68.0
-    y: 52.0
+    x: 200
+    y: 50
   }
   color {
-    y: 0.42
-    z: 0.08
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  type: TYPE_TEXT
+  text: "1"
+  font: "druid_text_bold"
+  id: "btn_melee_tier"
+  outline {
+    x: 1
+    y: 1
+    z: 1
+  }
+  parent: "btn_melee_badge"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: -28
+    y: 0
+  }
+  size {
+    x: 74
+    y: 64
+  }
+  color {
+    x: 0.145
+    y: 0.788
+    z: 0.541
   }
   type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_battle"
-  parent: "panel_bottom"
+  texture: "game/btn"
+  id: "btn_archer"
+  parent: "bottom"
+  inherit_alpha: true
   slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
+    x: 22
+    y: 22
+    z: 22
+    w: 22
   }
 }
 nodes {
   position {
-    y: 11.0
+    x: 0
+    y: 9
   }
   size {
-    x: 14.0
-    y: 14.0
-  }
-  type: TYPE_BOX
-  texture: "druid/icon_arrow"
-  id: "icon_battle"
-  parent: "btn_battle"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    y: -10.0
-  }
-  scale {
-    x: 0.38
-    y: 0.38
-  }
-  size {
-    x: 90.0
-    y: 40.0
-  }
-  type: TYPE_TEXT
-  text: "BATTLE"
-  font: "druid_text_bold"
-  id: "txt_battle"
-  parent: "btn_battle"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    x: 150.0
-    y: 337.5
-  }
-  size {
-    x: 280.0
-    y: 32.0
-  }
-  type: TYPE_BOX
-  id: "panel_tutorial"
-  inherit_alpha: true
-  visible: false
-}
-nodes {
-  scale {
-    x: 0.46
-    y: 0.46
-  }
-  size {
-    x: 588.0
-    y: 32.0
+    x: 32
+    y: 32
   }
   color {
-    y: 0.95
-    z: 0.4
+    x: 1
+    y: 1
+    z: 1
   }
-  type: TYPE_TEXT
-  font: "druid_text_bold"
-  id: "txt_tutorial_hint"
-  line_break: true
-  parent: "panel_tutorial"
+  type: TYPE_BOX
+  texture: "game/icon_bow"
+  id: "btn_archer_icon"
+  parent: "btn_archer"
   inherit_alpha: true
 }
 nodes {
   position {
-    x: 150.0
-    y: 300.0
+    x: -14
+    y: -17
   }
   size {
-    x: 300.0
-    y: 600.0
+    x: 14
+    y: 14
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_BOX
-  id: "panel_victory"
+  texture: "game/coin"
+  id: "btn_archer_coin"
+  parent: "btn_archer"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 6
+    y: -17
+  }
+  scale {
+    x: 0.34
+    y: 0.34
+    z: 1
+  }
+  size {
+    x: 120
+    y: 50
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_TEXT
+  text: "10"
+  font: "druid_text_bold"
+  id: "btn_archer_price"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "btn_archer"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: -16
+    y: -17
+  }
+  size {
+    x: 18
+    y: 18
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_ad"
+  id: "btn_archer_ad"
+  parent: "btn_archer"
   inherit_alpha: true
   enabled: false
-  visible: false
-}
-nodes {
-  size {
-    x: 300.0
-    y: 600.0
-  }
-  color {
-    x: 0.0
-    y: 0.0
-    z: 0.0
-  }
-  type: TYPE_BOX
-  texture: "druid/pixel"
-  id: "victory_bg"
-  parent: "panel_victory"
-  alpha: 0.65
-}
-nodes {
-  size {
-    x: 250.0
-    y: 220.0
-  }
-  color {
-    x: 0.12
-    y: 0.22
-    z: 0.32
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "victory_card"
-  parent: "panel_victory"
-  inherit_alpha: true
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
 }
 nodes {
   position {
-    y: 65.0
+    x: 8
+    y: -17
   }
   scale {
-    x: 0.8
-    y: 0.8
-  }
-  size {
-    x: 240.0
-    y: 40.0
-  }
-  color {
     x: 0.3
-    y: 0.95
-    z: 0.45
+    y: 0.3
+    z: 1
+  }
+  size {
+    x: 120
+    y: 50
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_TEXT
-  text: "VICTORY!"
+  text: "FREE"
   font: "druid_text_bold"
-  id: "txt_victory_title"
-  parent: "victory_card"
+  id: "btn_archer_free"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "btn_archer"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+  enabled: false
+}
+nodes {
+  position {
+    x: 26
+    y: 22
+  }
+  size {
+    x: 20
+    y: 20
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/tier_badge"
+  id: "btn_archer_badge"
+  parent: "btn_archer"
   inherit_alpha: true
 }
 nodes {
   position {
-    y: 25.0
+    x: 0
+    y: 0
   }
   scale {
-    x: 0.52
-    y: 0.52
+    x: 0.28
+    y: 0.28
+    z: 1
   }
   size {
-    x: 240.0
-    y: 30.0
+    x: 200
+    y: 50
   }
   color {
-    x: 0.95
-    y: 0.95
-    z: 0.95
+    x: 0.09
+    y: 0.102
+    z: 0.161
   }
   type: TYPE_TEXT
-  text: "EXCELLENT!"
+  text: "1"
   font: "druid_text_bold"
-  id: "txt_victory_congrats"
-  parent: "victory_card"
+  id: "btn_archer_tier"
+  outline {
+    x: 1
+    y: 1
+    z: 1
+  }
+  parent: "btn_archer_badge"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 42
+    y: 0
+  }
+  size {
+    x: 56
+    y: 56
+  }
+  color {
+    x: 0.608
+    y: 0.361
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/btn"
+  id: "btn_merge"
+  parent: "bottom"
+  inherit_alpha: true
+  slice9 {
+    x: 22
+    y: 22
+    z: 22
+    w: 22
+  }
+}
+nodes {
+  position {
+    x: 0
+    y: 2
+  }
+  size {
+    x: 30
+    y: 30
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_merge"
+  id: "btn_merge_icon"
+  parent: "btn_merge"
   inherit_alpha: true
 }
 nodes {
   position {
-    y: -15.0
+    x: 22
+    y: 22
+  }
+  size {
+    x: 14
+    y: 14
+  }
+  color {
+    x: 1
+    y: 0.302
+    z: 0.427
+  }
+  type: TYPE_BOX
+  texture: "game/dot"
+  id: "btn_merge_dot"
+  parent: "btn_merge"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 110
+    y: 0
+  }
+  size {
+    x: 72
+    y: 64
+  }
+  color {
+    x: 1
+    y: 0.541
+    z: 0.145
+  }
+  type: TYPE_BOX
+  texture: "game/btn"
+  id: "btn_fight"
+  parent: "bottom"
+  inherit_alpha: true
+  slice9 {
+    x: 22
+    y: 22
+    z: 22
+    w: 22
+  }
+}
+nodes {
+  position {
+    x: 0
+    y: 4
+  }
+  size {
+    x: 40
+    y: 40
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_fight"
+  id: "btn_fight_icon"
+  parent: "btn_fight"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 150
+    y: 470
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "hint"
+  inherit_alpha: true
+  enabled: false
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 200
+    y: 26
+  }
+  color {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  type: TYPE_BOX
+  texture: "game/panel"
+  id: "hint_bg"
+  parent: "hint"
+  inherit_alpha: true
+  slice9 {
+    x: 12
+    y: 12
+    z: 12
+    w: 12
+  }
+  alpha: 0.75
+}
+nodes {
+  position {
+    x: 0
+    y: 0
   }
   scale {
-    x: 0.65
-    y: 0.65
+    x: 0.36
+    y: 0.36
+    z: 1
   }
   size {
-    x: 240.0
-    y: 35.0
+    x: 520
+    y: 50
   }
   color {
-    y: 0.85
-    z: 0.2
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_TEXT
-  text: "+25 COINS"
+  text: ""
   font: "druid_text_bold"
-  id: "txt_victory_reward"
-  parent: "victory_card"
+  id: "txt_hint"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "hint"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 120
+    y: 120
+  }
+  size {
+    x: 40
+    y: 40
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/icon_hand"
+  id: "hand"
+  inherit_alpha: true
+  enabled: false
+}
+nodes {
+  position {
+    x: 150
+    y: 420
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "banner"
+  inherit_alpha: true
+  enabled: false
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 300
+    y: 54
+  }
+  color {
+    x: 0.165
+    y: 0.059
+    z: 0.098
+  }
+  type: TYPE_BOX
+  texture: "game/panel"
+  id: "banner_bg"
+  parent: "banner"
+  inherit_alpha: true
+  slice9 {
+    x: 14
+    y: 14
+    z: 14
+    w: 14
+  }
+  alpha: 0.85
+}
+nodes {
+  position {
+    x: -58
+    y: 0
+  }
+  size {
+    x: 40
+    y: 40
+  }
+  color {
+    x: 1
+    y: 0.353
+    z: 0.31
+  }
+  type: TYPE_BOX
+  texture: "game/icon_skull"
+  id: "banner_icon"
+  parent: "banner"
   inherit_alpha: true
 }
 nodes {
   position {
-    y: -65.0
+    x: 14
+    y: 0
   }
-  size {
-    x: 130.0
-    y: 42.0
-  }
-  color {
-    x: 0.2
+  scale {
+    x: 0.75
     y: 0.75
-    z: 0.35
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_next"
-  parent: "victory_card"
-  inherit_alpha: true
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
-}
-nodes {
-  scale {
-    x: 0.58
-    y: 0.58
+    z: 1
   }
   size {
-    x: 120.0
-    y: 30.0
+    x: 240
+    y: 50
+  }
+  color {
+    x: 1
+    y: 0.851
+    z: 0.831
   }
   type: TYPE_TEXT
-  text: "NEXT"
+  text: "BOSS"
   font: "druid_text_bold"
-  id: "txt_next"
-  parent: "btn_next"
+  id: "txt_banner"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "banner"
+  inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: 150
+    y: 400
+  }
+  size {
+    x: 0
+    y: 0
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  id: "toast"
+  inherit_alpha: true
+  enabled: false
+  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    x: 0
+    y: 0
+  }
+  size {
+    x: 220
+    y: 220
+  }
+  color {
+    x: 1
+    y: 0.878
+    z: 0.541
+  }
+  type: TYPE_BOX
+  texture: "game/rays"
+  id: "toast_rays"
+  parent: "toast"
+  inherit_alpha: true
+  alpha: 0.8
+}
+nodes {
+  position {
+    x: 0
+    y: 6
+  }
+  size {
+    x: 74
+    y: 74
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/tier_badge"
+  id: "toast_badge"
+  parent: "toast"
   inherit_alpha: true
 }
 nodes {
   position {
-    x: 150.0
-    y: 300.0
-  }
-  size {
-    x: 300.0
-    y: 600.0
-  }
-  type: TYPE_BOX
-  id: "panel_defeat"
-  inherit_alpha: true
-  enabled: false
-  visible: false
-}
-nodes {
-  size {
-    x: 300.0
-    y: 600.0
-  }
-  color {
-    x: 0.0
-    y: 0.0
-    z: 0.0
-  }
-  type: TYPE_BOX
-  texture: "druid/pixel"
-  id: "defeat_bg"
-  parent: "panel_defeat"
-  alpha: 0.65
-  enabled: false
-}
-nodes {
-  size {
-    x: 250.0
-    y: 190.0
-  }
-  color {
-    x: 0.32
-    y: 0.12
-    z: 0.15
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "defeat_card"
-  parent: "panel_defeat"
-  inherit_alpha: true
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
-  enabled: false
-}
-nodes {
-  position {
-    y: 40.0
+    x: 0
+    y: 0
   }
   scale {
     x: 0.8
     y: 0.8
+    z: 1
   }
   size {
-    x: 240.0
-    y: 40.0
+    x: 200
+    y: 50
   }
   color {
-    x: 0.95
-    y: 0.3
-    z: 0.3
+    x: 0.09
+    y: 0.102
+    z: 0.161
   }
   type: TYPE_TEXT
-  text: "DEFEAT!"
+  text: "5"
   font: "druid_text_bold"
-  id: "txt_defeat_title"
-  parent: "defeat_card"
+  id: "txt_toast_tier"
+  outline {
+    x: 1
+    y: 1
+    z: 1
+  }
+  parent: "toast_badge"
   inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
 }
 nodes {
   position {
-    y: -35.0
+    x: 0
+    y: -50
   }
-  size {
-    x: 130.0
-    y: 42.0
-  }
-  color {
-    x: 0.85
-    y: 0.35
-    z: 0.2
-  }
-  type: TYPE_BOX
-  texture: "druid/rect_round2_width2"
-  id: "btn_retry"
-  parent: "defeat_card"
-  inherit_alpha: true
-  slice9 {
-    x: 4.0
-    y: 4.0
-    z: 4.0
-    w: 4.0
-  }
-}
-nodes {
   scale {
-    x: 0.58
-    y: 0.58
+    x: 0.6
+    y: 0.6
+    z: 1
   }
   size {
-    x: 120.0
-    y: 30.0
+    x: 200
+    y: 50
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
   }
   type: TYPE_TEXT
-  text: "RETRY"
+  text: "NEW!"
   font: "druid_text_bold"
-  id: "txt_retry"
-  parent: "btn_retry"
+  id: "txt_toast"
+  outline {
+    x: 0.09
+    y: 0.102
+    z: 0.161
+  }
+  parent: "toast"
   inherit_alpha: true
+  outline_alpha: 1.0
+  shadow_alpha: 0.0
 }
 nodes {
   position {
-    x: 74.0
-    y: 84.0
-  }
-  rotation {
-    z: -90.0
+    x: -100
+    y: -100
   }
   size {
-    x: 32.0
-    y: 32.0
+    x: 18
+    y: 18
   }
   color {
-    y: 0.85
-    z: 0.25
+    x: 1
+    y: 1
+    z: 1
   }
   type: TYPE_BOX
-  texture: "druid/icon_arrow"
-  id: "hand_pointer"
-  inherit_alpha: true
-}
-nodes {
-  position {
-    x: -100.0
-    y: -100.0
-  }
-  size {
-    x: 20.0
-    y: 20.0
-  }
-  color {
-    y: 0.82
-    z: 0.15
-  }
-  type: TYPE_BOX
-  texture: "druid/ui_circle_16"
-  id: "coin_template"
+  texture: "game/coin"
+  id: "coin_fly"
   inherit_alpha: true
   enabled: false
-  visible: false
-}
-nodes {
-  position {
-    x: 150.0
-    y: 300.0
-  }
-  size {
-    x: 0.0
-    y: 0.0
-  }
-  type: TYPE_BOX
-  id: "forces"
-  alpha: 0.0
-  size_mode: SIZE_MODE_MANUAL
-  visible: false
-}
-nodes {
-  position {
-    x: -142.0
-  }
-  scale {
-    x: 2.6
-    y: 61.0
-  }
-  color {
-    x: 0.06
-    y: 0.08
-    z: 0.14
-  }
-  type: TYPE_BOX
-  texture: "druid/pixel"
-  id: "forces_bg"
-  parent: "forces"
-  alpha: 0.9
-  size_mode: SIZE_MODE_AUTO
-}
-nodes {
-  position {
-    x: -142.0
-    y: 120.0
-  }
-  scale {
-    x: 2.0
-    y: 30.0
-  }
-  color {
-    x: 0.95
-    y: 0.22
-    z: 0.25
-  }
-  type: TYPE_BOX
-  texture: "druid/pixel"
-  id: "forces_enemy"
-  pivot: PIVOT_N
-  parent: "forces"
-  size_mode: SIZE_MODE_AUTO
-}
-nodes {
-  position {
-    x: -142.0
-    y: -120.0
-  }
-  scale {
-    x: 2.0
-    y: 30.0
-  }
-  color {
-    x: 0.2
-    y: 0.55
-    z: 0.98
-  }
-  type: TYPE_BOX
-  texture: "druid/pixel"
-  id: "forces_player"
-  pivot: PIVOT_S
-  parent: "forces"
-  size_mode: SIZE_MODE_AUTO
 }
 material: "/builtins/materials/gui.material"
 adjust_reference: ADJUST_REFERENCE_PARENT
+max_nodes: 1024

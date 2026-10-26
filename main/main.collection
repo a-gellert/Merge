@@ -28,7 +28,7 @@ instances {
   prototype: "/main/entities/trash_bin/trash_bin.go"
   position {
     x: 200.0
-    y: 338.0
+    y: 322.0
     z: 0.6
   }
 }

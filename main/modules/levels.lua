@@ -1,433 +1,186 @@
+-- Procedural campaign with a two-level "Sawtooth" difficulty curve.
+-- Full design notes and the tuning table: docs/KNOWLEDGE_BASE.md
 local config = require("main.modules.config")
 
 local M = {}
 
 local MELEE = config.UNIT_MELEE
 local ARCHER = config.UNIT_ARCHER
-M.LEVELS = {
-	-- =========================================================================
-	-- ВОЛНА 1 (Уровни 1–5): Быстрый разгон (0:00 – 1:30) -> Цель: собрать Т4
-	-- =========================================================================
 
-	-- Level 1: Мгновенный экшен со старта (сразу даем пару Т1 + лучника и 25 монет на покупки)
+M.CHAPTER_SIZE = 10
+M.CAMPAIGN_LEVELS = 300 -- ~4 hours of content at human pace, endless after that
+
+-- Expected top tier of a player who merges reasonably (smooth baseline).
+-- Fast early climb (T1 -> T5 in ~10 levels), then a steady ~1 tier / 10 levels.
+M.CURVE_A = 2.6
+M.CURVE_B = 4.0
+M.CURVE_C = 0.115
+
+-- Sawtooth multipliers on enemy power, by step inside a 10-level chapter:
+-- relief -> climb -> mini-boss (5) -> breather -> climb -> chapter boss (10).
+-- The teeth get sharper with every chapter (amplitude 50% in ch.1 -> 100% from ch.3).
+M.SAWTOOTH = { 0.78, 0.86, 0.93, 1.00, 1.14, 0.90, 1.00, 1.07, 1.14, 1.32 }
+
+-- Enemy power in "army units" (how many top-tier squads the player should field).
+-- Early armies are small, so the factor ramps in over the first 50 levels.
+M.ARMY_FACTOR = 3.6
+M.ARMY_RAMP_LEVELS = 50
+M.ARMY_RAMP_START = 0.42
+M.ARMY_RAMP_POW = 1.6
+
+-- Coins a level pays out, in "shop purchases" at the expected shop tier
+M.INCOME_EARLY = 5.0
+M.INCOME_LATE = 2.6
+
+function M.target_tier(level)
+	return 1 + M.CURVE_A * math.log(1 + level / M.CURVE_B) + M.CURVE_C * level
+end
+
+function M.get_chapter(level)
+	return math.floor((level - 1) / M.CHAPTER_SIZE) + 1
+end
+
+function M.get_step(level)
+	return (level - 1) % M.CHAPTER_SIZE + 1
+end
+
+function M.is_boss(level)
+	return M.get_step(level) == M.CHAPTER_SIZE
+end
+
+function M.is_mini_boss(level)
+	return M.get_step(level) == 5
+end
+
+function M.get_difficulty(level)
+	local amp = math.min(1, 0.5 + 0.25 * (M.get_chapter(level) - 1))
+	return 1 + (M.SAWTOOTH[M.get_step(level)] - 1) * amp
+end
+
+-- Price of one shop squad at the shop tier we expect on this level
+function M.expected_unit_price(level)
+	local shop_tier = math.max(1, math.floor(M.target_tier(level)) - config.SHOP_GAP)
+	return config.PRICE_BASE * config.get_tier_value(shop_tier)
+end
+
+function M.get_income(level)
+	local k = math.min(1, (level - 1) / 25)
+	local units = M.INCOME_EARLY + (M.INCOME_LATE - M.INCOME_EARLY) * k
+	local mult = M.get_difficulty(level) -- bosses pay more
+	return math.floor(M.expected_unit_price(level) * units * mult + 0.5)
+end
+
+-- Formation templates: role list in priority order. B = boss/captain melee,
+-- M = melee, A = archer. Picked by number of squads.
+local SLOTS_FRONT = { { 1, 2 }, { 1, 3 }, { 1, 1 }, { 1, 4 }, { 2, 2 }, { 2, 3 }, { 2, 1 }, { 2, 4 } }
+local SLOTS_BACK = { { 4, 2 }, { 4, 3 }, { 3, 2 }, { 3, 3 }, { 4, 1 }, { 4, 4 }, { 3, 1 }, { 3, 4 } }
+
+-- Small deterministic RNG so a level always looks the same
+local function rng(seed)
+	local s = seed % 2147483647
+	if s <= 0 then s = s + 2147483646 end
+	return function()
+		s = (s * 16807) % 2147483647
+		return (s - 1) / 2147483646
+	end
+end
+
+local function tier_for_power(unit_type, power)
+	local p1 = config.get_squad_power(unit_type, 1)
+	local t = 1 + math.log(math.max(power, 1e-9) / p1) / math.log(config.TIER_GROWTH)
+	return math.max(1, math.min(config.MAX_TIER, math.floor(t + 0.5)))
+end
+
+-- Total enemy power budget for a level (before pity reduction)
+function M.get_enemy_budget(level)
+	local t = M.target_tier(level)
+	local top_power = config.get_squad_power(MELEE, 1) * config.TIER_GROWTH ^ (t - 1)
+	local ramp = M.ARMY_RAMP_START + (1 - M.ARMY_RAMP_START) * math.min(1, (level - 1) / M.ARMY_RAMP_LEVELS) ^ M.ARMY_RAMP_POW
+	return top_power * M.ARMY_FACTOR * ramp * M.get_difficulty(level)
+end
+
+local HANDMADE = {
+	-- Tutorial: 2 tiny melee vs player's merged T2 + archer
 	[1] = {
-		is_tutorial = true,
-		win_reward = 15,
 		enemies = {
 			{ row = 1, col = 2, unit_type = MELEE, tier = 1 },
 			{ row = 1, col = 3, unit_type = MELEE, tier = 1 },
 		},
 		initial_player = {
-			{ row = 3, col = 2, unit_type = MELEE, tier = 1 },
-			{ row = 2, col = 2, unit_type = ARCHER, tier = 1 },
-		}
+			{ row = 4, col = 2, unit_type = MELEE, tier = 1 },
+			{ row = 1, col = 2, unit_type = ARCHER, tier = 1 },
+		},
 	},
-	-- Level 2: Разгон (игрок покупает еще 2 отряда, мерджит Т2-Т3 и получает сундук)
 	[2] = {
-		win_reward = 25,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 2 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 1 },
-		}
-	},
-	-- Level 3: Знакомство с позиционкой (Т2 фронт + Т2 лучник)
-	[3] = {
-		win_reward = 40,
 		enemies = {
 			{ row = 1, col = 2, unit_type = MELEE, tier = 2 },
 			{ row = 1, col = 3, unit_type = MELEE, tier = 1 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 2 },
-		}
+			{ row = 3, col = 2, unit_type = ARCHER, tier = 1 },
+		},
 	},
-	-- Level 4: Предбоссовое напряжение (появляется капитан Т3, но без ваншота)
-	[4] = {
-		win_reward = 50,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 3 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 2 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 2 },
-		}
-	},
-	-- Level 5: [БОСС ВОЛНЫ 1] — Командир Т4 + охрана Т2
-	[5] = {
-		win_reward = 80,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 4 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 2 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 4 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 2 },
-		}
-	},
-
-	-- =========================================================================
-	-- ВОЛНА 2 (Уровни 6–10): Сборка Золотого Т5 и выход к Т6 (1:30 – 4:00)
-	-- =========================================================================
-
-	-- Level 6: [ЯМА РАЗРЯДКИ / ТРИУМФ] — Никаких Т4 и Т5! Широкая шеренга Т2 пехоты и лучников (-34% сложности).
-	-- Игрок выносит их своим новым Т4 за считанные секунды и фармит кучу монет!
-	[6] = {
-		win_reward = 120,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 2 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 2 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 2 },
-			{ row = 1, col = 4, unit_type = MELEE, tier = 2 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 2 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 2 },
-		}
-	},
-	-- Level 7: Плавный возврат к Т4 (фланговые стрелки)
-	[7] = {
-		win_reward = 150,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 4 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 3 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 3 },
-			{ row = 3, col = 4, unit_type = ARCHER, tier = 3 },
-		}
-	},
-	-- Level 8: Два танка Т4 + прикрытие лучников
-	[8] = {
-		win_reward = 200,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 4 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 4 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 4 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 3 },
-		}
-	},
-	-- Level 9: Предбоссовое напряжение (появляется первый Т5 врага)
-	[9] = {
-		win_reward = 250,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 5 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 4 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 4 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 4 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 4 },
-		}
-	},
-	-- Level 10: [БОСС ВОЛНЫ 2] — Воевода Т6 + гвардия Т5
-	[10] = {
-		win_reward = 300,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 5 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 4 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 5 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 4 },
-		}
-	},
-
-	-- =========================================================================
-	-- ВОЛНА 3 (Уровни 11–15): Мидгейм и первый Рубиновый Т7 (4:00 – 8:00)
-	-- =========================================================================
-
-	-- Level 11: [ЯМА РАЗРЯДКИ / ТРИУМФ] — Спад сложности на 27% после Босса 10!
-	-- Командир Т5 в центре + шеренга Т4 и стрелки Т3 (никаких Т6).
-	[11] = {
-		win_reward = 400,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 4 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 5 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 4 },
-			{ row = 1, col = 4, unit_type = MELEE, tier = 4 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 3 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 3 },
-		}
-	},
-	-- Level 12: Возврат Т6 в авангард + перекрестный огонь
-	[12] = {
-		win_reward = 450,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 5 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 5 },
-			{ row = 3, col = 4, unit_type = ARCHER, tier = 5 },
-		}
-	},
-	-- Level 13: Батарея из трех лучников Т5 за спиной двух танков Т6
-	[13] = {
-		win_reward = 500,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 6 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 5 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 6 },
-			{ row = 3, col = 4, unit_type = ARCHER, tier = 5 },
-		}
-	},
-	-- Level 14: Напряжение перед боссом (плотный строй Т6)
-	[14] = {
-		win_reward = 600,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 6 },
-			{ row = 2, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 6 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 6 },
-		}
-	},
-	-- Level 15: [БОСС ВОЛНЫ 3] — Титан Т7 + Элитная стража Т6
-	[15] = {
-		win_reward = 600,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 6 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 6 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 6 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 6 },
-		}
-	},
-
-	-- =========================================================================
-	-- ВОЛНА 4 (Уровни 16–20): Масштабные сражения толп (8:00 – 13:00)
-	-- =========================================================================
-
-	-- Level 16: [ЯМА РАЗРЯДКИ / ТРИУМФ] — Спад сложности на 32% после Босса 15!
-	-- Командир Т6 в центре + шеренга Т5 пехоты и лучников (без Т7).
-	[16] = {
-		win_reward = 720,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 5 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 5 },
-			{ row = 1, col = 4, unit_type = MELEE, tier = 5 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 5 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 5 },
-		}
-	},
-	-- Level 17: Острие копья (Т7 в центре + снайперы Т6)
-	[17] = {
-		win_reward = 800,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 6 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 6 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 6 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 7 },
-		}
-	},
-	-- Level 18: Двойной щит Т7 + авангард Т6
-	[18] = {
-		win_reward = 870,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 6 },
-			{ row = 2, col = 2, unit_type = MELEE, tier = 7 },
-			{ row = 2, col = 3, unit_type = MELEE, tier = 7 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 7 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 6 },
-		}
-	},
-	-- Level 19: Предбоссовый штурм (Стена Т7 + батарея стрелков Т7/Т6)
-	[19] = {
-		win_reward = 950,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 7 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 6 },
-			{ row = 3, col = 4, unit_type = ARCHER, tier = 6 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 7 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 7 },
-		}
-	},
-	-- Level 20: [БОСС ВОЛНЫ 4] — Оверлорд Т8 + телохранители Т7
-	[20] = {
-		win_reward = 1100,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 7 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 6 },
-			{ row = 2, col = 4, unit_type = MELEE, tier = 6 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 7 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 7 },
-		}
-	},
-
-	-- =========================================================================
-	-- ВОЛНА 5 (Уровни 21–25): Поход к Левиафану Т9 (13:00 – 19:00)
-	-- =========================================================================
-
-	-- Level 21: [ЯМА РАЗРЯДКИ / ТРИУМФ] — Спад сложности на 34% после Босса 20!
-	-- Командир Т7 в центре + строй Т6 пехоты и лучников (без Т8).
-	[21] = {
-		win_reward = 1215,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 6 },
-			{ row = 1, col = 4, unit_type = MELEE, tier = 6 },
-			{ row = 4, col = 1, unit_type = ARCHER, tier = 6 },
-			{ row = 4, col = 4, unit_type = ARCHER, tier = 6 },
-		}
-	},
-	-- Level 22: Возврат Т8 в центр баррикады
-	[22] = {
-		win_reward = 1300,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 7 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 7 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 8 },
-		}
-	},
-	-- Level 23: Бронированная фаланга Т8 + снайперский огонь
-	[23] = {
-		win_reward = 1500,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 8 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 7 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 7 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 8 },
-			{ row = 3, col = 4, unit_type = ARCHER, tier = 7 },
-		}
-	},
-	-- Level 24: Тяжелый штурм (Два Т8 спереди + Два лучника Т8 сзади)
-	[24] = {
-		win_reward = 1700,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 8 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 7 },
-			{ row = 2, col = 4, unit_type = MELEE, tier = 7 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 8 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 8 },
-		}
-	},
-	-- Level 25: [БОСС ВОЛНЫ 5] — Левиафан Т9 + элита Т8
-	[25] = {
-		win_reward = 1800,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 9 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 8 },
-			{ row = 2, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 4, col = 1, unit_type = ARCHER, tier = 8 },
-			{ row = 4, col = 4, unit_type = ARCHER, tier = 8 },
-		}
-	},
-
-	-- =========================================================================
-	-- ВОЛНА 6 (Уровни 26–30): Финальный рывок к Богу Войны Т10 (19:00 – 25:00+)
-	-- =========================================================================
-
-	-- Level 26: [ЯМА РАЗРЯДКИ / ТРИУМФ] — Спад сложности на 31% после Босса 25!
-	-- Командир Т8 в центре + шеренга Т7 пехоты и лучников (без Т9) для фарма перед финалом.
-	[26] = {
-		win_reward = 1900,
-		enemies = {
-			{ row = 1, col = 1, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 7 },
-			{ row = 1, col = 4, unit_type = MELEE, tier = 7 },
-			{ row = 3, col = 2, unit_type = ARCHER, tier = 7 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 7 },
-		}
-	},
-	-- Level 27: Возврат Т9 в строй + трио стрелков Т8
-	[27] = {
-		win_reward = 2050,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 9 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 8 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 8 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 8 },
-			{ row = 3, col = 3, unit_type = ARCHER, tier = 8 },
-			{ row = 4, col = 4, unit_type = ARCHER, tier = 8 },
-		}
-	},
-	-- Level 28: Двойной бастион Т9 + Снайпер Т9
-	[28] = {
-		win_reward = 2100,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 9 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 9 },
-			{ row = 2, col = 2, unit_type = MELEE, tier = 8 },
-			{ row = 3, col = 1, unit_type = ARCHER, tier = 8 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 9 },
-			{ row = 4, col = 4, unit_type = ARCHER, tier = 8 },
-		}
-	},
-	-- Level 29: Предфинальная королевская гвардия (Появляется первый авангард Т10)
-	[29] = {
-		win_reward = 2250,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 10 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 9 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 8 },
-			{ row = 2, col = 4, unit_type = MELEE, tier = 8 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 9 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 9 },
-		}
-	},
-	-- Level 30: [ФИНАЛЬНЫЙ БОСС КАМПАНИИ] — Два Титана Т10 + Снайпер Т10
-	[30] = {
-		win_reward = 2500,
-		enemies = {
-			{ row = 1, col = 2, unit_type = MELEE, tier = 10 },
-			{ row = 1, col = 3, unit_type = MELEE, tier = 10 },
-			{ row = 2, col = 1, unit_type = MELEE, tier = 9 },
-			{ row = 2, col = 4, unit_type = MELEE, tier = 9 },
-			{ row = 4, col = 2, unit_type = ARCHER, tier = 10 },
-			{ row = 4, col = 3, unit_type = ARCHER, tier = 9 },
-		}
-	}
 }
 
-function M.get_level(level_num)
-	local count = #M.LEVELS
-	if level_num <= count then
-		return M.LEVELS[level_num]
-	end
-	-- Endless sawtooth scaling after level 30 (5-level repeating wave cycle)
-	local extra = level_num - count
-	local wave_index = math.floor((extra - 1) / 5)
-	local step_in_wave = (extra - 1) % 5 + 1
-	local base_tier = math.min(config.MAX_TIER - 2, 7 + math.floor(wave_index / 2))
-	local boss_tier = math.min(config.MAX_TIER, base_tier + 2)
+local function build_enemies(level)
+	local r = rng(level * 7919 + 13)
+	local budget = M.get_enemy_budget(level)
+	local boss = M.is_boss(level) or M.is_mini_boss(level)
 
-	if step_in_wave == 1 then
-		-- Sawtooth Trough: relief wave after boss
-		return {
-			win_reward = 2800 + extra * 120,
-			enemies = {
-				{ row = 1, col = 1, unit_type = MELEE, tier = base_tier },
-				{ row = 1, col = 2, unit_type = MELEE, tier = base_tier + 1 },
-				{ row = 1, col = 3, unit_type = MELEE, tier = base_tier },
-				{ row = 1, col = 4, unit_type = MELEE, tier = base_tier },
-				{ row = 4, col = 2, unit_type = ARCHER, tier = base_tier },
-				{ row = 4, col = 3, unit_type = ARCHER, tier = base_tier },
-			}
-		}
-	elseif step_in_wave == 5 then
-		-- Sawtooth Peak: Endless Boss
-		return {
-			win_reward = 4000 + extra * 150,
-			enemies = {
-				{ row = 1, col = 2, unit_type = MELEE, tier = boss_tier },
-				{ row = 1, col = 3, unit_type = MELEE, tier = boss_tier },
-				{ row = 2, col = 1, unit_type = MELEE, tier = base_tier + 1 },
-				{ row = 2, col = 4, unit_type = MELEE, tier = base_tier + 1 },
-				{ row = 4, col = 2, unit_type = ARCHER, tier = boss_tier },
-				{ row = 4, col = 3, unit_type = ARCHER, tier = base_tier + 1 },
-			}
-		}
-	else
-		-- Steps 2, 3, 4: ascending ramp
-		local ramp_tier = math.min(config.MAX_TIER, base_tier + (step_in_wave >= 3 and 1 or 0))
-		return {
-			win_reward = 3000 + extra * 130,
-			enemies = {
-				{ row = 1, col = 2, unit_type = MELEE, tier = ramp_tier + 1 },
-				{ row = 1, col = 3, unit_type = MELEE, tier = ramp_tier },
-				{ row = 2, col = 1, unit_type = MELEE, tier = base_tier },
-				{ row = 2, col = 4, unit_type = MELEE, tier = base_tier },
-				{ row = 4, col = 2, unit_type = ARCHER, tier = ramp_tier },
-				{ row = 4, col = 3, unit_type = ARCHER, tier = base_tier },
-			}
-		}
+	-- Crowd grows with progress: 3 squads early, up to 10 late
+	local count = math.min(10, 3 + math.floor(level / 5))
+	if M.get_step(level) == 1 then count = math.max(3, count - 1) end
+
+	-- Archer share wobbles per level for variety (25%..45%)
+	local archer_share = 0.25 + r() * 0.2
+	local n_archers = math.max(1, math.floor(count * archer_share + 0.5))
+	if level <= 3 then n_archers = 1 end
+	local n_melee = count - n_archers
+
+	local slots = {}
+	for i = 1, n_melee do
+		local w = (i <= 2) and 1.3 or 1.0
+		table.insert(slots, { unit_type = MELEE, weight = w, cell = SLOTS_FRONT[i] })
 	end
+	for i = 1, n_archers do
+		table.insert(slots, { unit_type = ARCHER, weight = 0.9, cell = SLOTS_BACK[i] })
+	end
+	if boss then
+		slots[1].weight = M.is_boss(level) and 4.0 or 2.6
+		slots[1].is_boss = true
+	end
+
+	local total_w = 0
+	for _, s in ipairs(slots) do total_w = total_w + s.weight end
+
+	-- Spread the budget; carry rounding error into the next slot
+	local enemies = {}
+	local carry = 0
+	for _, s in ipairs(slots) do
+		-- carry never starves a slot below 45% of its share (no stray T1 among T16s)
+		local share = budget * s.weight / total_w
+		local want = math.max(share * 0.45, share + carry)
+		local tier = tier_for_power(s.unit_type, want)
+		local got = config.get_squad_power(s.unit_type, tier)
+		carry = want - got
+		table.insert(enemies, {
+			row = s.cell[1], col = s.cell[2],
+			unit_type = s.unit_type, tier = tier, is_boss = s.is_boss,
+		})
+	end
+	return enemies
+end
+
+function M.get_level(level_num)
+	local data = HANDMADE[level_num]
+	local enemies = data and data.enemies or build_enemies(level_num)
+	return {
+		enemies = enemies,
+		initial_player = data and data.initial_player,
+		income = M.get_income(level_num),
+		is_boss = M.is_boss(level_num),
+		is_mini_boss = M.is_mini_boss(level_num),
+		chapter = M.get_chapter(level_num),
+		step = M.get_step(level_num),
+	}
 end
 
 return M

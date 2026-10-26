@@ -19,13 +19,14 @@ local function setup(self, data)
 	self.home_pos = data.home_pos or go.get_position()
 	self.row = data.row
 	self.col = data.col
-	if data.card_type == "upgrade" then
-		go.set("#sprite", "tint", vmath.vector4(1.0, 0.90, 0.45, 1.0))
-	elseif data.card_type == "clone" then
-		go.set("#sprite", "tint", vmath.vector4(0.55, 0.95, 1.0, 1.0))
+	if data.golden then
+		go.set("#sprite", "tint", vmath.vector4(1.0, 0.86, 0.35, 1.0))
+		go.animate("#sprite", "tint", go.PLAYBACK_LOOP_PINGPONG, vmath.vector4(1.0, 1.0, 0.75, 1.0), go.EASING_INOUTSINE, 0.6)
 	else
 		go.set("#sprite", "tint", vmath.vector4(1.0, 1.0, 1.0, 1.0))
 	end
+	-- Idle wiggle invites a tap
+	go.animate(".", "euler.z", go.PLAYBACK_LOOP_PINGPONG, 6, go.EASING_INOUTSINE, 0.35, 0.6)
 end
 
 local function crack_open(self)
@@ -35,7 +36,10 @@ local function crack_open(self)
 	-- Rapid vibration shake & white flash
 	go.cancel_animations(".", "position")
 	go.cancel_animations(".", "scale")
-	go.set("#sprite", "tint", vmath.vector4(2.0, 2.0, 1.8, 1.0))
+	go.cancel_animations(".", "euler.z")
+	go.cancel_animations("#sprite", "tint")
+	go.set_rotation(vmath.quat())
+	go.set("#sprite", "tint", vmath.vector4(1.0, 1.0, 1.0, 1.0))
 
 	-- Quick violent wobble
 	local p = go.get_position()

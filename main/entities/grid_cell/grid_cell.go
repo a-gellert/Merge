@@ -3,35 +3,22 @@ components {
   component: "/main/entities/grid_cell/grid_cell.script"
 }
 embedded_components {
-  id: "bg"
+  id: "sprite"
   type: "sprite"
-  data: "default_animation: \"pixel\"\n"
+  data: "default_animation: \"cell\"\n"
   "material: \"/builtins/materials/sprite.material\"\n"
   "textures {\n"
   "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
+  "  texture: \"/main/assets/game.atlas\"\n"
   "}\n"
   ""
   position {
-    z: -0.01
+    x: 0
+    y: 0
+    z: 0
   }
   scale {
-    x: 13.0
-    y: 13.0
-  }
-}
-embedded_components {
-  id: "sprite"
-  type: "sprite"
-  data: "default_animation: \"rect_round2_width2\"\n"
-  "material: \"/builtins/materials/sprite.material\"\n"
-  "textures {\n"
-  "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
-  "}\n"
-  ""
-  scale {
-    x: 2.15
-    y: 2.15
+    x: 0.84
+    y: 0.84
   }
 }

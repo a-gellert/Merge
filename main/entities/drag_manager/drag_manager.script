@@ -5,6 +5,8 @@ local tutorial = require("main.modules.tutorial")
 local poki = require("main.modules.poki")
 local cards = require("main.modules.cards")
 
+local GUI_URL = "main:/main_gui#main"
+
 local camera = nil
 pcall(function()
 	camera = require("orthographic.camera")
@@ -58,7 +60,7 @@ function on_input(self, action_id, action)
 			battle_state.tap_battle_drum(world_pos)
 			-- Subtle punchy screen shake (clicker feel)
 			if camera and camera.shake then
-				camera.shake(self.camera_id, 0.006, 0.08)
+				camera.shake(self.camera_id, 0.003, 0.06)
 			end
 			return true
 		end
@@ -94,6 +96,7 @@ function on_input(self, action_id, action)
 					go.cancel_animations(item.go_id, "position")
 					go.set_position(vmath.vector3(world_pos.x, world_pos.y + 24, 0.75), item.go_id)
 					msg.post(item.go_id, "drag_state", { dragging = true })
+					msg.post(GUI_URL, "drag", { active = true })
 
 					if not tutorial.is_active() then
 						local price = battle_state.get_sell_price(item)
@@ -122,6 +125,7 @@ function on_input(self, action_id, action)
 					go.cancel_animations(item.go_id, "position")
 					go.set_position(vmath.vector3(world_pos.x, world_pos.y + 24, 0.75), item.go_id)
 					msg.post(item.go_id, "drag_state", { dragging = true })
+					msg.post(GUI_URL, "drag", { active = true })
 
 					if not tutorial.is_active() then
 						local price = battle_state.get_sell_price(item)
@@ -152,6 +156,7 @@ function on_input(self, action_id, action)
 			self.drag_type = nil
 			self.drag_r = nil
 			self.drag_c = nil
+			msg.post(GUI_URL, "drag", { active = false })
 
 			-- Stop any active hints on squads
 			local all_player = battle_state.get_player_squads()

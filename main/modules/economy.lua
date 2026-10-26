@@ -4,10 +4,18 @@ local M = {}
 
 local coins = config.START_COINS
 local displayed_coins = config.START_COINS
-local buy_count = 0
+local best_tier = 1        -- highest tier ever owned (drives shop tier)
+local level_buys = 0       -- purchases made during the current level
 local level_earned = 0
 local on_change_callbacks = {}
 local on_earn_callbacks = {}
+
+local function notify()
+	local disp = math.floor(displayed_coins)
+	for i = 1, #on_change_callbacks do
+		on_change_callbacks[i](disp)
+	end
+end
 
 function M.get_coins()
 	return coins
@@ -17,40 +25,53 @@ function M.get_displayed_coins()
 	return math.floor(displayed_coins)
 end
 
-function M.get_buy_cost()
-	local cost = config.BASE_BUY_COST -- 10
-	cost = math.floor(cost * (buy_count * 0.7 + 1))
-	return cost
+function M.get_best_tier()
+	return best_tier
 end
 
-local function notify()
-	local disp = math.floor(displayed_coins)
-	for i = 1, #on_change_callbacks do
-		on_change_callbacks[i](disp, M.get_buy_cost())
+function M.register_tier(tier)
+	if tier > best_tier then
+		best_tier = tier
+		notify()
+		return true
 	end
+	return false
 end
 
-function M.get_buy_count()
-	return buy_count
+-- Tier the shop sells right now
+function M.get_shop_tier()
+	return math.max(1, best_tier - config.SHOP_GAP)
 end
 
-function M.set_state(saved_coins, saved_buy_count)
-	coins = tonumber(saved_coins) or config.START_COINS
-	displayed_coins = coins
-	buy_count = tonumber(saved_buy_count) or 0
-	notify()
+function M.get_buy_cost()
+	local value = config.get_tier_value(M.get_shop_tier())
+	return math.floor(config.PRICE_BASE * value * config.PRICE_LEVEL_STEP ^ level_buys + 0.5)
 end
 
 function M.can_afford_buy()
 	return coins >= M.get_buy_cost()
 end
 
-function M.get_level_earned()
-	return level_earned
+function M.get_level_buys()
+	return level_buys
 end
 
-function M.reset_level_earned()
+function M.new_level()
+	level_buys = 0
 	level_earned = 0
+	notify()
+end
+
+function M.set_state(saved_coins, saved_best_tier, saved_level_buys)
+	coins = tonumber(saved_coins) or config.START_COINS
+	displayed_coins = coins
+	best_tier = tonumber(saved_best_tier) or 1
+	level_buys = tonumber(saved_level_buys) or 0
+	notify()
+end
+
+function M.get_level_earned()
+	return level_earned
 end
 
 function M.on_change(cb)
@@ -67,6 +88,7 @@ function M.clear_callbacks()
 end
 
 function M.add_coins(amount, origin_pos)
+	amount = math.floor(amount + 0.5)
 	if amount <= 0 then return end
 	coins = coins + amount
 	level_earned = level_earned + amount
@@ -80,14 +102,14 @@ function M.update(dt)
 	if coins == displayed_coins then return end
 
 	local diff = coins - displayed_coins
-	if math.abs(diff) <= 0.05 then
+	if math.abs(diff) <= 0.5 then
 		displayed_coins = coins
 		notify()
 		return
 	end
 
-	-- Gradually increase/transfer coins over roughly 0.6 - 1.0 second or minimum speed
-	local speed = math.max(10, math.abs(diff) * 4.0)
+	-- Counter rolls up quickly (~0.5s) so rewards feel tangible
+	local speed = math.max(10, math.abs(diff) * 6.0)
 	local step = speed * dt
 	if step >= math.abs(diff) then
 		displayed_coins = coins
@@ -104,7 +126,7 @@ function M.spend_for_buy()
 	end
 	coins = coins - cost
 	displayed_coins = coins
-	buy_count = buy_count + 1
+	level_buys = level_buys + 1
 	notify()
 	return true
 end
@@ -112,7 +134,8 @@ end
 function M.reset()
 	coins = config.START_COINS
 	displayed_coins = coins
-	buy_count = 0
+	best_tier = 1
+	level_buys = 0
 	level_earned = 0
 	notify()
 end

@@ -5,16 +5,20 @@ components {
 embedded_components {
   id: "sprite"
   type: "sprite"
-  data: "default_animation: \"ui_circle_16\"\n"
+  data: "default_animation: \"fx_spark\"\n"
   "material: \"/builtins/materials/sprite.material\"\n"
   "textures {\n"
   "  sampler: \"texture_sampler\"\n"
-  "  texture: \"/druid/druid.atlas\"\n"
+  "  texture: \"/main/assets/game.atlas\"\n"
   "}\n"
   ""
+  position {
+    x: 0
+    y: 0
+    z: 0
+  }
   scale {
-    x: 1.0
-    y: 1.0
-    z: 1.0
+    x: 1
+    y: 1
   }
 }

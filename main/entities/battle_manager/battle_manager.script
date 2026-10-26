@@ -1,506 +1,499 @@
+-- View bridge for battle_state + the FX library (pooled sprites, no per-effect scripts).
 local config = require("main.modules.config")
 local grid = require("main.modules.grid")
+local levels = require("main.modules.levels")
 local battle_state = require("main.modules.battle_state")
+local poki = require("main.modules.poki")
+
+local camera = nil
+pcall(function() camera = require("orthographic.camera") end)
+local CAMERA_ID = hash("/camera")
+
+local FX_POOL_SIZE = 220
+local MAX_SLASH_PER_FRAME = 5
+local MAX_COINS_PER_FRAME = 3
+local MAX_ARROW_FX_PER_FRAME = 6
 
 local action_queue = {}
-local effect_pool = {}
-local EFFECT_POOL_SIZE = 60
+local fx_pool = {}
+local fx_cursor = 1
+local now = 0
+local frame_budget = { slash = 0, coin = 0, arrow = 0 }
 
-local function init_effects()
-	effect_pool = {}
-	for i = 1, EFFECT_POOL_SIZE do
-		local p_id = factory.create("#effect_factory", vmath.vector3(0, -3000, 0))
-		msg.post(p_id, "disable")
-		table.insert(effect_pool, { id = p_id, in_use = false })
+local GOLD = vmath.vector4(1.0, 0.84, 0.25, 1)
+local WHITE = vmath.vector4(1, 1, 1, 1)
+
+-- =============================================================================
+-- FX
+-- =============================================================================
+local function init_fx()
+	fx_pool = {}
+	for i = 1, FX_POOL_SIZE do
+		local id = factory.create("#effect_factory", vmath.vector3(0, -3000, 0))
+		fx_pool[i] = { id = id, url = msg.url(nil, id, "sprite"), busy_until = 0, anim = hash("fx_spark") }
+		go.set(fx_pool[i].url, "tint", vmath.vector4(1, 1, 1, 0))
 	end
 end
 
-local function spawn_particle(ptype, pos, params)
-	local fx = nil
-	for i = 1, #effect_pool do
-		if not effect_pool[i].in_use then
-			fx = effect_pool[i]
-			break
-		end
+local function take_fx()
+	for _ = 1, FX_POOL_SIZE do
+		local f = fx_pool[fx_cursor]
+		fx_cursor = fx_cursor % FX_POOL_SIZE + 1
+		if f.busy_until <= now then return f end
 	end
-	if not fx then return end
-
-	fx.in_use = true
-	local fx_id = fx.id
-	go.set_position(vmath.vector3(pos.x, pos.y, 0.5), fx_id)
-	msg.post(fx_id, "enable")
-	msg.post(fx_id, "play", {
-		type = ptype,
-		tint = params and params.tint,
-		scale = params and params.scale or 1.0,
-		duration = params and params.duration or 0.25,
-		dir = params and params.dir,
-		dist = params and params.dist,
-		rotation = params and params.rotation,
-	})
+	return nil
 end
 
-local function play_merge_effect(pos, extra)
-	local tier = extra and extra.tier or 2
-	local ring_tint = config.TIER_RING_COLORS[tier] or config.TIER_RING_COLORS[1]
-	-- Shockwave ring
-	spawn_particle("merge_ring", pos, {
-		tint = vmath.vector4(ring_tint.x, ring_tint.y, ring_tint.z, 0.95),
-		scale = 1.3,
-		duration = 0.32,
-	})
-	-- Burst of golden and vibrant sparks
-	for i = 1, 14 do
-		local angle = (i / 14) * math.pi * 2 + (math.random() - 0.5) * 0.4
-		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
-		local dist = math.random(25, 65)
-		local tint = (i % 2 == 0) and vmath.vector4(1.0, 0.88, 0.20, 1.0) or ring_tint
-		spawn_particle("spark", pos, {
-			tint = tint,
-			dir = dir,
-			dist = dist,
-			scale = math.random() * 0.6 + 0.4,
-			duration = 0.28 + math.random() * 0.12,
+-- opts: anim, tint, s0, s1, dur, delay, to (vector3), rot, spin, z, ease, keep_alpha
+local function fx(pos, opts)
+	local f = take_fx()
+	if not f then return end
+	local id, url = f.id, f.url
+	local dur = opts.dur or 0.3
+	local delay = opts.delay or 0
+	f.busy_until = now + dur + delay + 0.03
+
+	go.cancel_animations(id, "position")
+	go.cancel_animations(id, "scale")
+	go.cancel_animations(id, "euler.z")
+	go.cancel_animations(url, "tint.w")
+
+	local anim = hash(opts.anim or "fx_spark")
+	if anim ~= f.anim then
+		f.anim = anim
+		sprite.play_flipbook(url, anim)
+	end
+	go.set_position(vmath.vector3(pos.x, pos.y, opts.z or 0.6), id)
+	go.set_rotation(vmath.quat_rotation_z(opts.rot or 0), id)
+	local s0 = opts.s0 or 1
+	go.set_scale(vmath.vector3(s0, opts.sy0 or s0, 1), id)
+	go.set(url, "tint", opts.tint or WHITE)
+
+	local s1 = opts.s1 or s0
+	go.animate(id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(s1, opts.sy1 or s1, 1), opts.ease or go.EASING_OUTQUAD, dur, delay)
+	go.animate(url, "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INQUAD, dur, delay)
+	if opts.to then
+		go.animate(id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(opts.to.x, opts.to.y, opts.z or 0.6), opts.move_ease or go.EASING_OUTQUAD, dur, delay)
+	end
+	if opts.spin then
+		go.animate(id, "euler.z", go.PLAYBACK_ONCE_FORWARD, opts.spin, go.EASING_OUTQUAD, dur, delay)
+	end
+end
+
+local function shake(intensity, duration)
+	if camera and camera.shake then
+		camera.shake(CAMERA_ID, intensity, duration)
+	end
+end
+
+local function sparks(pos, n, tint_a, tint_b, dmin, dmax, scale, dur)
+	for i = 1, n do
+		local a = (i / n) * math.pi * 2 + (math.random() - 0.5) * 0.5
+		local d = dmin + math.random() * (dmax - dmin)
+		fx(pos, {
+			anim = "fx_spark",
+			tint = (i % 2 == 0) and tint_a or (tint_b or tint_a),
+			s0 = scale * (0.7 + math.random() * 0.6), s1 = 0.05,
+			dur = dur * (0.8 + math.random() * 0.5),
+			to = vmath.vector3(pos.x + math.cos(a) * d, pos.y + math.sin(a) * d, 0),
+			z = 0.7,
 		})
 	end
 end
 
-local function play_hit_effect(pos, team)
-	local is_enemy = (team == config.TEAM_ENEMY)
-	local hit_color = is_enemy and vmath.vector4(1.0, 0.35, 0.35, 1.0) or vmath.vector4(0.35, 0.75, 1.0, 1.0)
-	-- Sharp sparks
+local function ring(pos, tint, s0, s1, dur, delay)
+	fx(pos, { anim = "fx_ring", tint = tint, s0 = s0, s1 = s1, dur = dur, delay = delay, z = 0.55 })
+end
+
+local function puff(pos, tint, s0, s1, dur)
+	fx(pos, { anim = "fx_puff", tint = tint, s0 = s0, s1 = s1, dur = dur, z = 0.5 })
+end
+
+local function coin_pop(pos, n)
+	for _ = 1, n do
+		if frame_budget.coin >= MAX_COINS_PER_FRAME then return end
+		frame_budget.coin = frame_budget.coin + 1
+		local to = vmath.vector3(pos.x + (math.random() - 0.5) * 26, pos.y + 18 + math.random() * 16, 0)
+		fx(pos, { anim = "coin", s0 = 0.35, s1 = 0.45, dur = 0.5, to = to, move_ease = go.EASING_OUTBACK, z = 0.8 })
+	end
+end
+
+local function team_tint(team, a)
+	if team == config.TEAM_ENEMY then
+		return vmath.vector4(1.0, 0.45, 0.35, a or 1)
+	end
+	return vmath.vector4(0.45, 0.8, 1.0, a or 1)
+end
+
+local EFFECTS = {}
+
+EFFECTS.merge = function(pos, extra)
+	local tint = config.get_tier_color(extra and extra.tier or 2)
+	puff(pos, vmath.vector4(1, 1, 1, 0.9), 0.6, 2.2, 0.22)
+	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.25, 1.7, 0.4)
+	sparks(pos, 14, GOLD, tint, 25, 62, 0.9, 0.38)
+	shake(0.004, 0.12)
+end
+
+EFFECTS.new_tier = function(pos, extra)
+	local tint = config.get_tier_color(extra and extra.tier or 2)
+	ring(pos, vmath.vector4(1, 1, 1, 1), 0.3, 2.6, 0.5)
+	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.2, 2.0, 0.55, 0.08)
+	sparks(pos, 22, GOLD, WHITE, 35, 95, 1.1, 0.6)
+	shake(0.008, 0.2)
+end
+
+EFFECTS.lucky = function(pos)
+	ring(pos, GOLD, 0.3, 1.9, 0.45)
+	sparks(pos, 12, GOLD, WHITE, 25, 60, 1.0, 0.45)
+	coin_pop(pos, 3)
+end
+
+EFFECTS.sell = function(pos)
+	sparks(pos, 10, GOLD, vmath.vector4(1, 0.95, 0.6, 1), 18, 45, 0.7, 0.3)
+	coin_pop(pos, 3)
+	shake(0.004, 0.08)
+end
+
+EFFECTS.crate_open = function(pos, extra)
+	local tint = (extra and extra.golden) and GOLD or vmath.vector4(0.95, 0.75, 0.45, 1)
+	puff(pos, vmath.vector4(1, 0.95, 0.8, 0.9), 0.5, 2.0, 0.3)
+	sparks(pos, 12, tint, WHITE, 20, 55, 0.9, 0.4)
+	shake(0.005, 0.1)
+end
+
+EFFECTS.clash = function(pos, extra)
+	local tier = extra and extra.tier or 1
+	puff(pos, vmath.vector4(0.85, 0.8, 0.7, 0.7), 0.6, 2.4, 0.4)
+	ring(pos, vmath.vector4(1, 1, 1, 0.9), 0.2, 1.3, 0.25)
+	sparks(pos, 8, vmath.vector4(1, 0.95, 0.7, 1), WHITE, 15, 40, 0.8, 0.25)
+	shake(math.min(0.012, 0.004 + tier * 0.0006), 0.12)
+end
+
+EFFECTS.squad_death = function(pos, extra)
+	local tier = extra and extra.tier or 1
+	local big = extra and extra.is_boss
+	local tint = team_tint(extra and extra.team)
+	puff(pos, vmath.vector4(tint.x, tint.y, tint.z, 0.75), 0.8, big and 4.0 or 2.6, 0.45)
+	ring(pos, vmath.vector4(1, 1, 1, 0.9), 0.3, big and 3.2 or 2.0, 0.4)
+	sparks(pos, big and 20 or 10, tint, GOLD, 20, big and 90 or 55, 0.9, 0.45)
+	shake(big and 0.016 or math.min(0.01, 0.003 + tier * 0.0005), big and 0.3 or 0.14)
+end
+
+EFFECTS.arrow_hit = function(pos, extra)
+	if frame_budget.arrow >= MAX_ARROW_FX_PER_FRAME then return end
+	frame_budget.arrow = frame_budget.arrow + 1
+	local fire = extra and extra.fire
+	local tint = fire and vmath.vector4(1, 0.55, 0.1, 0.9) or vmath.vector4(1, 0.95, 0.8, 0.8)
+	puff(pos, tint, 0.2, fire and 0.9 or 0.6, 0.18)
+	if math.random() < 0.4 then
+		sparks(pos, 2, tint, WHITE, 6, 16, 0.4, 0.16)
+	end
+end
+
+EFFECTS.slash = function(from_pos, target_pos)
+	if frame_budget.slash >= MAX_SLASH_PER_FRAME then return end
+	frame_budget.slash = frame_budget.slash + 1
+	local angle = math.atan2(target_pos.y - from_pos.y, target_pos.x - from_pos.x) - math.pi * 0.5 + (math.random() - 0.5) * 1.2
+	local p = vmath.vector3(target_pos.x + (math.random() - 0.5) * 18, target_pos.y + (math.random() - 0.5) * 18, 0)
+	fx(p, { anim = "fx_slash", tint = vmath.vector4(1, 1, 1, 0.95), rot = angle, s0 = 0.35, s1 = 0.55, sy0 = 0.35, sy1 = 0.2, dur = 0.14, z = 0.65 })
+end
+
+EFFECTS.drum_tap = function(pos)
+	ring(pos, vmath.vector4(1, 0.8, 0.3, 0.8), 0.15, 0.9, 0.22)
+	sparks(pos, 4, vmath.vector4(1, 0.6, 0.15, 1), GOLD, 10, 26, 0.5, 0.2)
+end
+
+EFFECTS.battle_start = function(pos)
+	ring(pos, vmath.vector4(1, 1, 1, 0.9), 0.4, 5.0, 0.5)
+	shake(0.006, 0.15)
+end
+
+EFFECTS.victory_burst = function()
 	for i = 1, 6 do
-		local angle = math.random() * math.pi * 2
-		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
-		local dist = math.random(12, 35)
-		spawn_particle("hit_spark", pos, {
-			tint = (i % 2 == 0) and hit_color or vmath.vector4(1.0, 0.95, 0.6, 1.0),
-			dir = dir,
-			dist = dist,
-			scale = 0.4 + math.random() * 0.3,
-			duration = 0.18 + math.random() * 0.08,
-		})
+		local p = vmath.vector3(110 + math.random() * 180, 360 + math.random() * 170, 0)
+		ring(p, GOLD, 0.2, 1.6, 0.5, i * 0.06)
+		sparks(p, 6, GOLD, WHITE, 20, 50, 0.9, 0.5)
 	end
 end
 
-local function play_slash_effect(from_pos, target_pos)
-	local dx = target_pos.x - from_pos.x
-	local dy = target_pos.y - from_pos.y
-	local angle = math.atan2(dy, dx) + math.pi * 0.5 + (math.random() - 0.5) * 0.5
-	local offset_x = (math.random() - 0.5) * 14
-	local offset_y = (math.random() - 0.5) * 14
-	local hit_pos = vmath.vector3(target_pos.x + offset_x, target_pos.y + offset_y, 0.5)
-	spawn_particle("slash_slice", hit_pos, {
-		tint = vmath.vector4(1.0, 1.0, 1.0, 0.95),
-		rotation = angle,
-		scale = 0.9 + math.random() * 0.4,
-		duration = 0.12 + math.random() * 0.05,
-	})
+EFFECTS.defeat_burst = function(pos)
+	ring(pos, vmath.vector4(1, 0.3, 0.3, 0.8), 0.4, 4.0, 0.6)
+	shake(0.01, 0.25)
 end
 
-local function play_drum_tap_effect(pos)
-	-- Soft subtle ripple
-	spawn_particle("drum_ripple", pos, {
-		tint = vmath.vector4(1.0, 0.85, 0.40, 0.45),
-		scale = 0.9,
-		duration = 0.24,
-	})
-	-- Inner soft flash
-	spawn_particle("drum_ripple", pos, {
-		tint = vmath.vector4(1.0, 1.0, 0.90, 0.50),
-		scale = 0.45,
-		duration = 0.16,
-	})
-	-- Subtle spark burst
-	for i = 1, 4 do
-		local angle = (i / 5) * math.pi * 2 + (math.random() - 0.5) * 0.4
-		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
-		spawn_particle("spark", pos, {
-			tint = vmath.vector4(1.0, 0.55, 0.15, 0.9),
-			dir = dir,
-			dist = math.random(15, 30),
-			scale = 0.45,
-			duration = 0.22,
-		})
+local function play_effect(effect_type, pos, extra)
+	local f = EFFECTS[effect_type]
+	if f then f(pos, extra) end
+end
+
+-- =============================================================================
+-- VIEW QUEUE (factory/go calls must run inside this script's context)
+-- =============================================================================
+local function queue(fn)
+	action_queue[#action_queue + 1] = fn
+end
+
+local function process_queue()
+	local i = 1
+	while i <= #action_queue do
+		action_queue[i]()
+		i = i + 1
 	end
+	action_queue = {}
 end
 
-local function play_sell_effect(pos)
-	-- Golden and bright ruby coin burst sparks
-	for i = 1, 10 do
-		local angle = (i / 10) * math.pi * 2 + (math.random() - 0.5) * 0.4
-		local dir = vmath.vector3(math.cos(angle), math.sin(angle), 0)
-		local dist = math.random(16, 42)
-		local tint = (i % 2 == 0) and vmath.vector4(1.0, 0.85, 0.20, 1.0) or vmath.vector4(1.0, 0.35, 0.35, 1.0)
-		spawn_particle("spark", pos, {
-			tint = tint,
-			dir = dir,
-			dist = dist,
-			scale = math.random() * 0.5 + 0.4,
-			duration = 0.25 + math.random() * 0.1,
-		})
+local function setup_msg(sq)
+	return {
+		team = sq.team,
+		unit_type = sq.unit_type,
+		tier = sq.tier,
+		unit_count = sq.unit_count,
+		pos = sq.current_pos,
+		is_merge = sq.is_merge,
+		is_boss = sq.is_boss,
+	}
+end
+
+local function delete_go(go_id, duration, to_pos)
+	if not (go_id and go.exists(go_id)) then return end
+	go.cancel_animations(go_id, "scale")
+	go.cancel_animations(go_id, "position")
+	if to_pos then
+		go.animate(go_id, "position", go.PLAYBACK_ONCE_FORWARD, to_pos, go.EASING_INQUAD, duration)
 	end
+	go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1), go.EASING_INBACK, duration, 0, function()
+		if go.exists(go_id) then go.delete(go_id, true) end
+	end)
 end
 
-local function process_queue(self)
-	while #action_queue > 0 do
-		local act = table.remove(action_queue, 1)
-		if act.type == "spawn" then
-			local squad_data = act.squad_data
-			if squad_data.is_alive then
-				if squad_data.go_id and go.exists(squad_data.go_id) then
-					go.delete(squad_data.go_id, true)
-				end
-				local bunch_id = factory.create("#bunch_factory", squad_data.home_pos)
-				squad_data.go_id = bunch_id
-				msg.post(bunch_id, "setup", {
-					team = squad_data.team,
-					unit_type = squad_data.unit_type,
-					tier = squad_data.tier,
-					unit_count = squad_data.unit_count,
-					pos = squad_data.current_pos,
-					is_merge = squad_data.is_merge,
-				})
-			end
-		elseif act.type == "despawn" then
-			local go_id = act.go_id
-			if go_id and go.exists(go_id) then
-				go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.08, 0, function()
-					if go.exists(go_id) then
-						go.delete(go_id, true)
-					end
-				end)
-			end
-		elseif act.type == "sell_despawn" then
-			local go_id = act.go_id
-			if go_id and go.exists(go_id) then
-				go.cancel_animations(go_id, "position")
-				go.cancel_animations(go_id, "scale")
-				local target_pos = act.pos or vmath.vector3(config.TRASH_BIN_POS)
-				go.animate(go_id, "position", go.PLAYBACK_ONCE_FORWARD, target_pos, go.EASING_INQUAD, 0.14)
-				go.animate(go_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.01, 0.01, 1.0), go.EASING_INBACK, 0.14, 0, function()
-					if go.exists(go_id) then
-						go.delete(go_id, true)
-					end
-				end)
-			end
-		elseif act.type == "spawn_card" then
-			local card_data = act.card_data
-			if card_data.go_id and go.exists(card_data.go_id) then
-				go.delete(card_data.go_id)
-			end
-			local card_id = factory.create("#card_factory", card_data.home_pos)
-			card_data.go_id = card_id
-			msg.post(card_id, "setup", {
-				card_type = card_data.card_type,
-				home_pos = card_data.home_pos,
-				row = card_data.row,
-				col = card_data.col,
-			})
-		elseif act.type == "despawn_card" then
-			local go_id = act.go_id
-			if go_id and go.exists(go_id) then
-				msg.post(go_id, "consume")
-			end
-		elseif act.type == "spawn_crate" then
-			local crate_data = act.crate_data
-			if crate_data.go_id and go.exists(crate_data.go_id) then
-				go.delete(crate_data.go_id)
-			end
-			local crate_id = factory.create("#crate_factory", crate_data.home_pos)
-			crate_data.go_id = crate_id
-			msg.post(crate_id, "setup", {
-				home_pos = crate_data.home_pos,
-				row = crate_data.row,
-				col = crate_data.col,
-				card_type = crate_data.forced_card_type,
-			})
-		elseif act.type == "despawn_crate" then
-			local go_id = act.go_id
-			local cb = act.callback
-			if go_id and go.exists(go_id) then
-				msg.post(go_id, "crack")
-				if cb then
-					timer.delay(0.28, false, function()
-						cb()
-					end)
-				end
-			else
-				if cb then
-					cb()
-				end
-			end
-		elseif act.type == "phase_change" then
-			local new_phase = act.phase
-			if new_phase == config.PHASE_BATTLE then
-				-- Hide grid cells smoothly
-				if self.cells then
-					for i = 1, #self.cells do
-						if go.exists(self.cells[i]) then
-							msg.post(self.cells[i], "hide", { duration = 0.18 })
-						end
-					end
-				end
-				-- Hide bonus crates
-				local crates = battle_state.get_crates()
-				for i = 1, #crates do
-					if crates[i].go_id and go.exists(crates[i].go_id) then
-						msg.post(crates[i].go_id, "hide", { duration = 0.18 })
-					end
-				end
-				-- Hide unused bonus cards
-				local cards_list = battle_state.get_cards()
-				for i = 1, #cards_list do
-					if cards_list[i].go_id and go.exists(cards_list[i].go_id) then
-						msg.post(cards_list[i].go_id, "hide", { duration = 0.18 })
-					end
-				end
-			elseif new_phase == config.PHASE_PREP then
-				-- Show grid cells smoothly
-				if self.cells then
-					for i = 1, #self.cells do
-						if go.exists(self.cells[i]) then
-							msg.post(self.cells[i], "show", { duration = 0.22 })
-						end
-					end
-				end
-				-- Show bonus crates
-				local crates = battle_state.get_crates()
-				for i = 1, #crates do
-					if crates[i].go_id and go.exists(crates[i].go_id) then
-						msg.post(crates[i].go_id, "show", { duration = 0.22 })
-					end
-				end
-				-- Show bonus cards
-				local cards_list = battle_state.get_cards()
-				for i = 1, #cards_list do
-					if cards_list[i].go_id and go.exists(cards_list[i].go_id) then
-						msg.post(cards_list[i].go_id, "show", { duration = 0.22 })
-					end
-				end
-			end
-		elseif act.type == "effect" then
-			if act.effect_type == "merge" then
-				play_merge_effect(act.pos, act.extra)
-			elseif act.effect_type == "hit" then
-				play_hit_effect(act.pos, act.team)
-			elseif act.effect_type == "slash" then
-				play_slash_effect(act.from_pos, act.target_pos)
-			elseif act.effect_type == "drum_tap" then
-				play_drum_tap_effect(act.pos)
-			elseif act.effect_type == "sell" then
-				play_sell_effect(act.pos)
-			end
-		end
+local function set_field_items_visible(self, visible)
+	local cmd = visible and "show" or "hide"
+	local dur = visible and 0.22 or 0.18
+	for i = 1, #self.cells do
+		msg.post(self.cells[i], cmd, { duration = dur })
+	end
+	for _, c in ipairs(battle_state.get_crates()) do
+		if c.go_id then msg.post(c.go_id, cmd, { duration = dur }) end
+	end
+	for _, c in ipairs(battle_state.get_cards()) do
+		if c.go_id then msg.post(c.go_id, cmd, { duration = dur }) end
 	end
 end
 
 local function spawn_grid_cells(self)
 	self.cells = {}
-	-- Player 4x4 Grid
-	for r = 1, config.GRID_ROWS do
-		for c = 1, config.GRID_COLS do
-			local pos = grid.get_cell_pos(config.TEAM_PLAYER, r, c)
-			pos.z = -0.1
-			local cell_id = factory.create("#cell_factory", pos, nil, { team = hash("player") })
-			table.insert(self.cells, cell_id)
+	for _, team in ipairs({ config.TEAM_PLAYER, config.TEAM_ENEMY }) do
+		for r = 1, config.GRID_ROWS do
+			for c = 1, config.GRID_COLS do
+				local pos = grid.get_cell_pos(team, r, c)
+				pos.z = -0.1
+				table.insert(self.cells, factory.create("#cell_factory", pos, nil, { team = hash(team) }))
+			end
 		end
 	end
-	-- Enemy 4x4 Grid
-	for r = 1, config.GRID_ROWS do
-		for c = 1, config.GRID_COLS do
-			local pos = grid.get_cell_pos(config.TEAM_ENEMY, r, c)
-			pos.z = -0.1
-			local cell_id = factory.create("#cell_factory", pos, nil, { team = hash("enemy") })
-			table.insert(self.cells, cell_id)
-		end
+end
+
+local function make_handlers(self)
+	return {
+		spawn_squad = function(sq)
+			queue(function()
+				if not sq.is_alive then return end
+				if sq.go_id and go.exists(sq.go_id) then go.delete(sq.go_id, true) end
+				sq.go_id = factory.create("#bunch_factory", vmath.vector3(sq.current_pos.x, sq.current_pos.y, 0))
+				msg.post(sq.go_id, "setup", setup_msg(sq))
+				sq.is_merge = nil
+			end)
+		end,
+
+		refresh_squad = function(sq)
+			if sq.go_id then
+				msg.post(sq.go_id, "setup", setup_msg(sq))
+				sq.is_merge = nil
+			end
+		end,
+
+		despawn_squad = function(sq, reason)
+			local id = sq.go_id
+			sq.go_id = nil
+			if not id then return end
+			queue(function()
+				if reason == "remove" then
+					if go.exists(id) then go.delete(id, true) end
+				else
+					delete_go(id, reason == "dead" and 0.18 or 0.1)
+				end
+			end)
+		end,
+
+		update_squad = function(sq)
+			if sq.go_id then
+				msg.post(sq.go_id, "update_visual", { pos = sq.current_pos, alive_units = sq.alive_units })
+			end
+		end,
+
+		replenish_squad = function(sq)
+			if sq.go_id then msg.post(sq.go_id, "replenish", { pos = sq.home_pos }) end
+		end,
+
+		snap_squad = function(sq)
+			if sq.go_id then msg.post(sq.go_id, "snap", { pos = sq.home_pos }) end
+		end,
+
+		snap_item = function(item)
+			if item.go_id then msg.post(item.go_id, "snap", { pos = item.home_pos }) end
+		end,
+
+		damage_squad = function(sq, amount, killed)
+			if sq.go_id then msg.post(sq.go_id, "hit") end
+			if killed and killed > 0 and sq.team == config.TEAM_ENEMY then
+				local p = vmath.vector3(sq.current_pos)
+				queue(function() coin_pop(p, 1) end)
+			end
+		end,
+
+		attack_squad = function(sq, tgt)
+			if sq.go_id then msg.post(sq.go_id, "attack", { target_pos = tgt.current_pos }) end
+			local from, to = vmath.vector3(sq.current_pos), vmath.vector3(tgt.current_pos)
+			queue(function() EFFECTS.slash(from, to) end)
+		end,
+
+		squad_buff = function(sq, buff, on)
+			if sq.go_id then msg.post(sq.go_id, "buff", { buff = buff, on = on }) end
+		end,
+
+		play_effect = function(effect_type, pos, extra)
+			local p = pos and vmath.vector3(pos) or vmath.vector3(200, 322, 0)
+			queue(function() play_effect(effect_type, p, extra) end)
+		end,
+
+		spawn_card = function(card)
+			queue(function()
+				if card.go_id and go.exists(card.go_id) then go.delete(card.go_id) end
+				card.go_id = factory.create("#card_factory", card.home_pos)
+				msg.post(card.go_id, "setup", { card_type = card.card_type, home_pos = card.home_pos })
+			end)
+		end,
+
+		despawn_card = function(card)
+			local id = card.go_id
+			card.go_id = nil
+			if id then msg.post(id, "consume") end
+		end,
+
+		spawn_crate = function(crate)
+			queue(function()
+				if crate.go_id and go.exists(crate.go_id) then go.delete(crate.go_id) end
+				crate.go_id = factory.create("#crate_factory", crate.home_pos)
+				msg.post(crate.go_id, "setup", { home_pos = crate.home_pos, golden = crate.is_golden })
+			end)
+		end,
+
+		despawn_crate = function(crate, callback)
+			local id = crate.go_id
+			crate.go_id = nil
+			if id then msg.post(id, "crack") end
+			if callback then
+				queue(function() timer.delay(0.28, false, callback) end)
+			end
+		end,
+
+		sell_item = function(item, pos)
+			local id = item.go_id
+			item.go_id = nil
+			queue(function() delete_go(id, 0.14, vmath.vector3(pos.x, pos.y, 0.7)) end)
+		end,
+
+		phase_changed = function(phase)
+			queue(function()
+				if phase == config.PHASE_BATTLE then
+					set_field_items_visible(self, false)
+				elseif phase == config.PHASE_PREP then
+					set_field_items_visible(self, true)
+				end
+			end)
+		end,
+
+		level_changed = function(level)
+			queue(function()
+				local tint = config.get_chapter_tint(levels.get_chapter(level))
+				go.animate("#board_bg", "tint", go.PLAYBACK_ONCE_FORWARD, tint, go.EASING_INOUTQUAD, 0.6)
+			end)
+		end,
+	}
+end
+
+-- Debug autoplay for smoke tests: dmengine --config=merge.autoplay=1 [--config=merge.fresh=1]
+local function autoplay_tick(self)
+	local phase = battle_state.get_phase()
+	if phase == config.PHASE_PREP then
+		local crates = battle_state.get_crates()
+		if #crates > 0 then battle_state.open_crate(crates[1]) return end
+		if battle_state.auto_merge() then return end
+		if battle_state.buy_unit(math.random() < 0.6 and config.UNIT_MELEE or config.UNIT_ARCHER) then return end
+		battle_state.start_battle()
+	elseif phase == config.PHASE_BATTLE then
+		battle_state.tap_battle_drum(vmath.vector3(150 + math.random() * 100, 250, 0))
 	end
 end
 
 function init(self)
-
-	-- Initialize arena background
-	go.set("#board_bg", "tint", vmath.vector4(1.0, 1.0, 1.0, 1.0))
-
+	self.autoplay = sys.get_config_int("merge.autoplay", 0) == 1
+	self.autoplay_timer = 1.0
+	go.set("#board_bg", "tint", vmath.vector4(1, 1, 1, 1))
 	spawn_grid_cells(self)
-	-- Enable automatic zoom on camera to adapt to different window/screen resolutions
 	msg.post("/camera#script", "set_automatic_zoom", { enabled = true })
 
-	-- Wire battle_state callbacks to Defold game objects via command queue
-	-- (Ensures all go.* and factory.* calls run strictly within a .script context)
-	battle_state.set_view_handlers({
-		spawn_squad = function(squad_data)
-			table.insert(action_queue, { type = "spawn", squad_data = squad_data })
-		end,
+	battle_state.set_view_handlers(make_handlers(self))
+	init_fx()
 
-		despawn_squad = function(squad_data)
-			local dead_id = squad_data.go_id
-			squad_data.go_id = nil
-			if dead_id then
-				table.insert(action_queue, { type = "despawn", go_id = dead_id })
-			end
-		end,
-
-		update_squad = function(squad_data)
-			if squad_data.go_id then
-				msg.post(squad_data.go_id, "update_visual", {
-					pos = squad_data.current_pos,
-					hp = squad_data.hp,
-					max_hp = squad_data.max_hp,
-					alive_units = squad_data.alive_units,
-					is_drum_raging = (squad_data.team == config.TEAM_PLAYER and battle_state.get_rage_drum_active()),
-				})
-			end
-		end,
-
-		replenish_squad = function(squad_data)
-			if squad_data.go_id then
-				msg.post(squad_data.go_id, "replenish", {
-					pos = squad_data.home_pos,
-					hp = squad_data.hp,
-					max_hp = squad_data.max_hp,
-					alive_units = squad_data.alive_units,
-				})
-			end
-		end,
-
-		snap_squad = function(squad_data)
-			if squad_data.go_id then
-				msg.post(squad_data.go_id, "replenish", {
-					pos = squad_data.home_pos,
-					hp = squad_data.hp,
-					max_hp = squad_data.max_hp,
-					alive_units = squad_data.alive_units,
-				})
-			end
-		end,
-
-		damage_squad = function(squad_data, amount)
-			if squad_data.go_id then
-				msg.post(squad_data.go_id, "hit")
-				msg.post(squad_data.go_id, "update_visual", {
-					pos = squad_data.current_pos,
-					hp = squad_data.hp,
-					max_hp = squad_data.max_hp,
-					alive_units = squad_data.alive_units,
-				})
-			end
-			table.insert(action_queue, {
-				type = "effect",
-				effect_type = "hit",
-				pos = squad_data.current_pos,
-				team = squad_data.team,
-			})
-		end,
-
-		attack_squad = function(squad_data, target_data)
-			if squad_data.go_id then
-				msg.post(squad_data.go_id, "attack", { target_pos = target_data.current_pos })
-			end
-			table.insert(action_queue, {
-				type = "effect",
-				effect_type = "slash",
-				from_pos = squad_data.current_pos,
-				target_pos = target_data.current_pos,
-			})
-		end,
-
-		play_effect = function(effect_type, pos, extra)
-			table.insert(action_queue, {
-				type = "effect",
-				effect_type = effect_type,
-				pos = pos,
-				extra = extra,
-			})
-		end,
-
-		spawn_card = function(card_data)
-			table.insert(action_queue, { type = "spawn_card", card_data = card_data })
-		end,
-
-		despawn_card = function(card_data)
-			local dead_id = card_data.go_id
-			card_data.go_id = nil
-			if dead_id then
-				table.insert(action_queue, { type = "despawn_card", go_id = dead_id })
-			end
-		end,
-
-		spawn_crate = function(crate_data)
-			table.insert(action_queue, { type = "spawn_crate", crate_data = crate_data })
-		end,
-
-		despawn_crate = function(crate_data, callback)
-			local dead_id = crate_data.go_id
-			crate_data.go_id = nil
-			if dead_id then
-				table.insert(action_queue, { type = "despawn_crate", go_id = dead_id, callback = callback })
-			end
-		end,
-
-		sell_squad = function(squad_data, sell_pos)
-			local dead_id = squad_data.go_id
-			squad_data.go_id = nil
-			if dead_id then
-				table.insert(action_queue, { type = "sell_despawn", go_id = dead_id, pos = sell_pos })
-			end
-		end,
-
-		sell_card = function(card_data, sell_pos)
-			local dead_id = card_data.go_id
-			card_data.go_id = nil
-			if dead_id then
-				table.insert(action_queue, { type = "sell_despawn", go_id = dead_id, pos = sell_pos })
-			end
-		end,
-
-		phase_changed = function(new_phase)
-			table.insert(action_queue, { type = "phase_change", phase = new_phase })
-		end,
-	})
-
-	init_effects()
-
-	-- Try loading saved game; if none exists, start initial level (Level 1 Tutorial)
-	local loaded = battle_state.load_game()
-	if not loaded then
+	local fresh = sys.get_config_int("merge.fresh", 0) == 1
+	local debug_level = sys.get_config_int("merge.start_level", 0)
+	if debug_level > 1 then
+		battle_state.debug_setup(debug_level)
+	elseif fresh or not battle_state.load_game() then
 		battle_state.start_level(1)
 	else
-		battle_state.start_level(battle_state.get_current_level())
+		battle_state.start_level(battle_state.get_current_level(), false, true)
 	end
-	process_queue(self)
+	process_queue()
 end
 
 function final(self)
 	for i = 1, #self.cells do
-		if go.exists(self.cells[i]) then
-			go.delete(self.cells[i])
-		end
+		if go.exists(self.cells[i]) then go.delete(self.cells[i]) end
 	end
 	self.cells = {}
-	for i = 1, #effect_pool do
-		if go.exists(effect_pool[i].id) then
-			go.delete(effect_pool[i].id)
-		end
+	for i = 1, #fx_pool do
+		if go.exists(fx_pool[i].id) then go.delete(fx_pool[i].id) end
 	end
-	effect_pool = {}
+	fx_pool = {}
 end
 
 function update(self, dt)
-	process_queue(self)
+	now = now + dt
+	frame_budget.slash, frame_budget.coin, frame_budget.arrow = 0, 0, 0
+	poki.update(dt)
+	process_queue()
 	battle_state.update_battle(dt)
-	process_queue(self)
-end
-
-function on_message(self, message_id, message, sender)
-	if message_id == hash("recycle") then
-		for i = 1, #effect_pool do
-			if effect_pool[i].id == sender then
-				effect_pool[i].in_use = false
-				msg.post(sender, "disable")
-				go.set_position(vmath.vector3(0, -3000, 0), sender)
-				break
-			end
+	if self.autoplay then
+		local t = socket.gettime()
+		self.perf_start = self.perf_start or t
+		self.perf_n = (self.perf_n or 0) + 1
+		if t - self.perf_start >= 5 then
+			print(string.format("[perf] real_fps=%.1f level=%d phase=%s", self.perf_n / (t - self.perf_start), battle_state.get_current_level(), battle_state.get_phase()))
+			self.perf_start, self.perf_n = t, 0
+		end
+		if battle_state.get_phase() ~= self.autoplay_phase then
+			self.autoplay_phase = battle_state.get_phase()
+			self.autoplay_timer = 2.5
+		end
+		self.autoplay_timer = self.autoplay_timer - dt
+		if self.autoplay_timer <= 0 then
+			local ph = battle_state.get_phase()
+			self.autoplay_timer = (ph == config.PHASE_BATTLE) and 0.15 or ((ph == config.PHASE_PREP) and 0.3 or 1.5)
+			autoplay_tick(self)
 		end
 	end
+	process_queue()
 end

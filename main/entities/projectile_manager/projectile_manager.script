@@ -1,157 +1,55 @@
+-- Renders the pure-Lua arrow pool (main/modules/projectiles.lua) onto pooled sprites.
 local config = require("main.modules.config")
-local battle_state = require("main.modules.battle_state")
+local projectiles = require("main.modules.projectiles")
 
-local pool = {}
-local POOL_SIZE = config.PROJECTILE_POOL_SIZE or 75
 local FACTORY_URL = "#projectile_factory"
-
-local function init_pool()
-	pool = {}
-	for i = 1, POOL_SIZE do
-		local p_id = factory.create(FACTORY_URL, vmath.vector3(0, -2000, 0))
-		msg.post(p_id, "disable")
-		table.insert(pool, {
-			id = p_id,
-			active = false,
-			pos = vmath.vector3(0, -2000, 0),
-			dir = vmath.vector3(0, 1, 0),
-			target_point = vmath.vector3(0, 0, 0),
-			target_squad = nil,
-			damage = 0,
-			speed = config.PROJECTILE_SPEED,
-			distance_left = 0,
-		})
-	end
-end
-
-local function spawn_arrow(from_pos, target_squad, damage, miss_radius, is_fire)
-	-- Find inactive projectile in pool
-	local arrow = nil
-	for i = 1, #pool do
-		if not pool[i].active then
-			arrow = pool[i]
-			break
-		end
-	end
-	if not arrow then return end
-
-	-- Calculate target point aimed at individual units across squad formation area
-	local target_pos = target_squad.current_pos
-	local tox = 0
-	local toy = 0
-	local alive_count = math.min(target_squad.alive_units or 1, (target_squad.sub_units and #target_squad.sub_units) or 1)
-	if target_squad.sub_units and alive_count > 0 then
-		local rand_idx = math.random(1, alive_count)
-		local target_unit = target_squad.sub_units[rand_idx]
-		if target_unit and target_unit.offset then
-			tox = target_unit.offset.x
-			toy = target_unit.offset.y
-		end
-	else
-		local squad_r = math.max(6, 4.0 * math.sqrt(target_squad.unit_count or 1))
-		local angle = math.random() * math.pi * 2
-		local r = math.sqrt(math.random()) * squad_r
-		tox = math.cos(angle) * r
-		toy = math.sin(angle) * r
-	end
-
-	local scatter_x = 0
-	local scatter_y = 0
-	if miss_radius and miss_radius > 0 then
-		local angle = math.random() * math.pi * 2
-		local r = math.random() * (miss_radius * 0.4)
-		scatter_x = math.cos(angle) * r
-		scatter_y = math.sin(angle) * r
-	end
-
-	local tx = target_pos.x + tox + scatter_x
-	local ty = target_pos.y + toy + scatter_y
-	local start_pos = vmath.vector3(from_pos.x, from_pos.y, 0.5)
-
-	local dx = tx - start_pos.x
-	local dy = ty - start_pos.y
-	local dist = math.sqrt(dx * dx + dy * dy)
-	if dist < 1 then dist = 1 end
-
-	arrow.active = true
-	arrow.pos = start_pos
-	arrow.dir = vmath.vector3(dx / dist, dy / dist, 0)
-	arrow.target_point = vmath.vector3(tx, ty, 0)
-	arrow.target_squad = target_squad
-	arrow.damage = damage
-	arrow.distance_left = dist
-
-	-- Rotation towards target
-	local rot = vmath.quat_rotation_z(math.atan2(dy, dx) - math.pi * 0.5)
-	go.set_rotation(rot, arrow.id)
-	go.set_position(arrow.pos, arrow.id)
-
-	-- Tint based on shooter team or fire buff
-	local tint
-	if is_fire then
-		tint = vmath.vector4(1.0, 0.45, 0.05, 1.0)
-	else
-		tint = (target_squad.team == config.TEAM_ENEMY) and config.COLOR_PLAYER_ARROW or config.COLOR_ENEMY_ARROW
-	end
-	msg.post(arrow.id, "set_tint", { tint = tint })
-	msg.post(arrow.id, "enable")
-end
+local HIDDEN = vmath.vector3(0, -3000, 0)
 
 function init(self)
-	init_pool()
-
-	-- Register shoot handler directly into battle_state
-	battle_state.set_view_handlers({
-		shoot_projectile = function(shooter_squad, target_squad, damage, miss_radius, origin_pos)
-			local start_pt = origin_pos or shooter_squad.current_pos
-			local is_fire = (shooter_squad and shooter_squad.has_fire)
-			spawn_arrow(start_pt, target_squad, damage, miss_radius, is_fire)
-		end
-	})
+	self.sprites = {}
+	local pool = projectiles.get_pool()
+	for i = 1, #pool do
+		local id = factory.create(FACTORY_URL, HIDDEN)
+		self.sprites[i] = { id = id, url = msg.url(nil, id, "sprite"), version = -1, shown = false }
+	end
 end
 
 function final(self)
-	for i = 1, #pool do
-		go.delete(pool[i].id)
+	for i = 1, #self.sprites do
+		if go.exists(self.sprites[i].id) then go.delete(self.sprites[i].id) end
 	end
-	pool = {}
+	self.sprites = {}
 end
 
 function update(self, dt)
+	local pool = projectiles.get_pool()
 	for i = 1, #pool do
 		local p = pool[i]
-		if p.active then
-			local step = p.speed * dt
-			p.pos = p.pos + p.dir * step
-			p.distance_left = p.distance_left - step
-
-			if p.distance_left <= 0 then
-				-- Projectile reached target point
-				if p.target_squad and p.target_squad.is_alive then
-					local sx = p.target_squad.current_pos.x
-					local sy = p.target_squad.current_pos.y
-					local dx = p.pos.x - sx
-					local dy = p.pos.y - sy
-					local d2 = dx * dx + dy * dy
-					local hit_radius = math.max(config.PROJECTILE_HIT_RADIUS, 4.0 * math.sqrt(p.target_squad.unit_count or 1) + 14)
-					if d2 <= (hit_radius * hit_radius) then
-						battle_state.apply_damage(p.target_squad, p.damage)
+		local s = self.sprites[i]
+		if s then
+			if p.active then
+				if s.version ~= p.version then
+					s.version = p.version
+					local tint
+					if p.is_fire then
+						tint = vmath.vector4(1.0, 0.55, 0.1, 1)
+					elseif p.team == config.TEAM_PLAYER then
+						tint = config.COLOR_PLAYER_ARROW
+					else
+						tint = config.COLOR_ENEMY_ARROW
 					end
+					go.set(s.url, "tint", tint)
 				end
-
-				-- Deactivate & return to pool
-				p.active = false
-				msg.post(p.id, "disable")
-				go.set_position(vmath.vector3(0, -2000, 0), p.id)
-			else
-				go.set_position(p.pos, p.id)
+				-- Arrow grows a bit at the top of its arc (fake height)
+				local h = 1 + (p.lift or 0) / 90
+				go.set_position(vmath.vector3(p.x, p.y, 0.5), s.id)
+				go.set_rotation(vmath.quat_rotation_z(p.angle - math.pi * 0.5), s.id)
+				go.set_scale(vmath.vector3(0.55 * h, 0.55 * h, 1), s.id)
+				s.shown = true
+			elseif s.shown then
+				s.shown = false
+				go.set_position(HIDDEN, s.id)
 			end
 		end
-	end
-end
-
-function on_message(self, message_id, message, sender)
-	if message_id == hash("shoot") then
-		spawn_arrow(message.from_pos, message.target_squad, message.damage, message.miss_radius)
 	end
 end

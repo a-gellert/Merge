@@ -1,458 +1,476 @@
 local druid = require("druid.druid")
 local i18n = require("main.modules.i18n")
 local config = require("main.modules.config")
+local levels = require("main.modules.levels")
 local economy = require("main.modules.economy")
 local battle_state = require("main.modules.battle_state")
 local tutorial = require("main.modules.tutorial")
 local poki = require("main.modules.poki")
-local grid = require("main.modules.grid")
+
+local camera = nil
+pcall(function() camera = require("orthographic.camera") end)
+local CAMERA_ID = hash("/camera")
+
+local FREE_AD_COOLDOWN = 45   -- seconds between "free squad" rewarded offers
+local FREE_AD_MIN_LEVEL = 3
+local MAX_FLYING_COINS = 14
+local BOTTOM_Y = 48
+
+local COLOR_MELEE = vmath.vector4(0.227, 0.553, 1, 1)
+local COLOR_ARCHER = vmath.vector4(0.145, 0.788, 0.541, 1)
+local COLOR_AD = vmath.vector4(0.2, 0.82, 0.416, 1)
+local COLOR_OFF = vmath.vector4(0.36, 0.39, 0.52, 1)
+local COLOR_DOT_OFF = vmath.vector4(0.365, 0.388, 0.518, 1)
+local COLOR_DOT_DONE = vmath.vector4(1.0, 0.81, 0.23, 1)
+local COLOR_SKULL = vmath.vector4(1.0, 0.35, 0.31, 1)
+
+local SUFFIXES = { { 1e24, "Sp" }, { 1e21, "Sx" }, { 1e18, "Qi" }, { 1e15, "Qa" }, { 1e12, "T" }, { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" } }
 
 local function format_number(val)
-	val = tonumber(val) or 0
-	local sign = val < 0 and "-" or ""
-	val = math.abs(val)
-
-	if val < 1000 then
-		return sign .. tostring(math.floor(val))
-	end
-
-	local units = {
-		{ 1e12, "T" },
-		{ 1e9, "B" },
-		{ 1e6, "M" },
-		{ 1e3, "K" },
-	}
-
-	for _, unit in ipairs(units) do
-		local threshold = unit[1]
-		local suffix = unit[2]
-		if val >= threshold then
-			local num = val / threshold
-			if num >= 100 then
-				return string.format("%s%d%s", sign, math.floor(num), suffix)
-			elseif num >= 10 then
-				local str = string.format("%.1f", num)
-				str = string.gsub(str, "%.0$", "")
-				return sign .. str .. suffix
-			else
-				local str = string.format("%.2f", num)
-				str = string.gsub(str, "0+$", "")
-				str = string.gsub(str, "%.$", "")
-				return sign .. str .. suffix
-			end
+	val = math.floor(tonumber(val) or 0)
+	if val < 1000 then return tostring(val) end
+	for _, u in ipairs(SUFFIXES) do
+		if val >= u[1] then
+			local n = val / u[1]
+			if n >= 100 then return string.format("%d%s", math.floor(n), u[2]) end
+			if n >= 10 then return (string.format("%.1f", n):gsub("%.0$", "")) .. u[2] end
+			return (string.format("%.2f", n):gsub("0+$", ""):gsub("%.$", "")) .. u[2]
 		end
 	end
-
-	return sign .. tostring(math.floor(val))
+	return tostring(val)
 end
 
-local function update_economy_display(coins, cost)
-	gui.set_text(gui.get_node("txt_coins"), format_number(coins))
-	local buy_label = i18n.get("BUY") .. " " .. format_number(cost)
-	gui.set_text(gui.get_node("txt_buy"), buy_label)
+local function N(name) return gui.get_node(name) end
 
-	local btn_node = gui.get_node("btn_buy")
-	if coins >= cost then
-		gui.set_color(btn_node, vmath.vector4(0.16, 0.34, 0.65, 1.0))
-	else
-		gui.set_color(btn_node, vmath.vector4(0.25, 0.28, 0.35, 0.8))
+-- Scales are relative to the node's scale from the .gui file
+local base_scales = {}
+local function base_scale(node)
+	local key = gui.get_id(node)
+	local s = base_scales[key]
+	if not s then
+		s = gui.get_scale(node).x
+		base_scales[key] = s
 	end
+	return s
+end
 
-	local btn_rew_node = gui.get_node("btn_reward")
-	local has_empty = (grid.find_first_empty_player_cell() ~= nil)
-	if has_empty and tutorial.is_completed() then
-		gui.set_color(btn_rew_node, vmath.vector4(0.12, 0.52, 0.32, 1.0))
-	else
-		gui.set_color(btn_rew_node, vmath.vector4(0.25, 0.30, 0.28, 0.8))
-	end
+local function pop(node, from, to, dur)
+	local b = base_scale(node)
+	gui.cancel_animations(node, gui.PROP_SCALE)
+	gui.set_scale(node, vmath.vector3(from * b, from * b, 1))
+	gui.animate(node, gui.PROP_SCALE, vmath.vector3((to or 1) * b, (to or 1) * b, 1), gui.EASING_OUTBACK, dur or 0.3)
+end
 
-	local btn_merge_node = gui.get_node("btn_merge")
-	if battle_state.can_auto_merge() then
-		gui.set_color(btn_merge_node, vmath.vector4(0.52, 0.22, 0.82, 1.0))
-	else
-		gui.set_color(btn_merge_node, vmath.vector4(0.28, 0.22, 0.35, 0.75))
+local function pulse(node, on, amount)
+	local b = base_scale(node)
+	gui.cancel_animations(node, gui.PROP_SCALE)
+	gui.set_scale(node, vmath.vector3(b, b, 1))
+	if on then
+		local s = (amount or 1.08) * b
+		gui.animate(node, gui.PROP_SCALE, vmath.vector3(s, s, 1), gui.EASING_INOUTSINE, 0.45, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 	end
 end
 
-local function update_level_display(lvl)
-	gui.set_text(gui.get_node("txt_level"), i18n.get("LEVEL") .. " " .. tostring(lvl))
+-- World position -> local position of a root GUI node
+local function world_to_gui(self, pos)
+	if not (camera and camera.world_to_screen) then
+		return vmath.vector3(pos.x - 50, pos.y, 0)
+	end
+	local sp = camera.world_to_screen(CAMERA_ID, vmath.vector3(pos.x, pos.y, 0))
+	gui.set_screen_position(self.helper, vmath.vector3(sp.x, sp.y, 0))
+	return gui.get_position(self.helper)
 end
 
-local function stop_hand_animation(self)
-	local hand = gui.get_node("hand_pointer")
+local function node_to_gui(self, node)
+	gui.set_screen_position(self.helper, gui.get_screen_position(node))
+	return gui.get_position(self.helper)
+end
+
+-- =============================================================================
+-- HUD
+-- =============================================================================
+local function can_offer_free_ad(self)
+	return tutorial.is_completed()
+		and battle_state.get_current_level() >= FREE_AD_MIN_LEVEL
+		and battle_state.has_free_cell()
+		and not economy.can_afford_buy()
+		and self.time >= self.free_ad_ready_at
+end
+
+local function update_buy_button(self, prefix, base_color, offer_ad)
+	local btn = N(prefix)
+	local affordable = economy.can_afford_buy()
+	local has_cell = battle_state.has_free_cell()
+	gui.set_text(N(prefix .. "_price"), format_number(economy.get_buy_cost()))
+	local shop_tier = economy.get_shop_tier()
+	gui.set_text(N(prefix .. "_tier"), tostring(shop_tier))
+	gui.set_color(N(prefix .. "_badge"), config.get_tier_color(shop_tier))
+
+	gui.set_enabled(N(prefix .. "_coin"), not offer_ad)
+	gui.set_enabled(N(prefix .. "_price"), not offer_ad)
+	gui.set_enabled(N(prefix .. "_ad"), offer_ad)
+	gui.set_enabled(N(prefix .. "_free"), offer_ad)
+
+	local color = base_color
+	if offer_ad then
+		color = COLOR_AD
+	elseif not (affordable and has_cell) then
+		color = COLOR_OFF
+	end
+	gui.set_color(btn, color)
+end
+
+local function update_level_pill(self, level)
+	gui.set_text(N("txt_level"), tostring(level))
+	local step = levels.get_step(level)
+	for i = 1, 10 do
+		local dot = N("dot_" .. i)
+		gui.cancel_animations(dot, gui.PROP_SCALE)
+		gui.set_scale(dot, vmath.vector3(1, 1, 1))
+		local is_skull = (i == 5 or i == 10)
+		if i < step then
+			gui.set_color(dot, COLOR_DOT_DONE)
+		elseif i == step then
+			gui.set_color(dot, is_skull and COLOR_SKULL or vmath.vector4(1, 1, 1, 1))
+			pulse(dot, true, is_skull and 1.25 or 1.5)
+		else
+			gui.set_color(dot, is_skull and vmath.vector4(0.6, 0.3, 0.32, 1) or COLOR_DOT_OFF)
+		end
+	end
+end
+
+local function refresh_hud(self)
+	gui.set_text(N("txt_coins"), format_number(economy.get_displayed_coins()))
+
+	local offer_ad = can_offer_free_ad(self)
+	update_buy_button(self, "btn_melee", COLOR_MELEE, offer_ad)
+	update_buy_button(self, "btn_archer", COLOR_ARCHER, offer_ad)
+	if offer_ad ~= self.offer_ad then
+		self.offer_ad = offer_ad
+		pulse(N("btn_melee"), offer_ad, 1.05)
+		pulse(N("btn_archer"), offer_ad, 1.05)
+		if offer_ad then poki.measure("ad", "free_squad", "visible") end
+	end
+
+	local can_merge = battle_state.can_auto_merge()
+	gui.set_enabled(N("btn_merge_dot"), can_merge)
+	gui.set_color(N("btn_merge"), can_merge and vmath.vector4(0.608, 0.361, 1, 1) or COLOR_OFF)
+	if can_merge ~= self.can_merge then
+		self.can_merge = can_merge
+		pulse(N("btn_merge_dot"), can_merge, 1.4)
+	end
+
+	local p, e = battle_state.get_player_power(), battle_state.get_enemy_power()
+	gui.set_text(N("txt_power_p"), format_number(p))
+	gui.set_text(N("txt_power_e"), format_number(e))
+	gui.set_color(N("txt_power_p"), p >= e and vmath.vector4(0.7, 1, 0.75, 1) or vmath.vector4(0.75, 0.89, 1, 1))
+end
+
+-- =============================================================================
+-- TUTORIAL
+-- =============================================================================
+local function stop_hand(self)
+	local hand = N("hand")
 	gui.cancel_animations(hand, gui.PROP_POSITION)
-	gui.cancel_animations(hand, gui.PROP_SCALE)
-	gui.set_visible(hand, false)
+	gui.set_enabled(hand, false)
+	gui.set_enabled(N("hint"), false)
 end
 
-local function update_tutorial_ui(self, step)
-	local hand = gui.get_node("hand_pointer")
-	local hint = gui.get_node("txt_tutorial_hint")
-	stop_hand_animation(self)
+local function show_hint(text)
+	gui.set_enabled(N("hint"), true)
+	gui.set_text(N("txt_hint"), text)
+	local w = math.max(120, #text * 7.5 + 30)
+	gui.set_size(N("hint_bg"), vmath.vector3(w, 26, 0))
+end
 
-	if step == tutorial.STEP_BUY then
-		gui.set_visible(hand, true)
-		gui.set_position(hand, vmath.vector3(56, 84, 0))
-		gui.animate(hand, "position.y", 70, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
-		gui.set_text(hint, i18n.get("TUTORIAL_BUY"))
-	elseif step == tutorial.STEP_MERGE then
-		gui.set_visible(hand, true)
-		local p_from = vmath.vector3(120, 250, 0)
-		local p_to = vmath.vector3(180, 250, 0)
-		gui.set_position(hand, p_from)
-		gui.animate(hand, "position", p_to, gui.EASING_INOUTSINE, 0.9, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
-		gui.set_text(hint, i18n.get("TUTORIAL_MERGE"))
-	elseif step == tutorial.STEP_BATTLE then
-		gui.set_visible(hand, true)
-		gui.set_position(hand, vmath.vector3(236, 86, 0))
-		gui.animate(hand, "position.y", 72, gui.EASING_INOUTSINE, 0.6, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
-		gui.set_text(hint, i18n.get("TUTORIAL_BATTLE"))
+local function point_hand(self, from, to)
+	local hand = N("hand")
+	gui.set_enabled(hand, true)
+	gui.cancel_animations(hand, gui.PROP_POSITION)
+	local off = vmath.vector3(6, -22, 0)
+	gui.set_position(hand, from + off)
+	if to then
+		gui.animate(hand, gui.PROP_POSITION, to + off, gui.EASING_INOUTSINE, 0.9, 0.2, nil, gui.PLAYBACK_LOOP_PINGPONG)
 	else
-		gui.set_text(hint, "")
+		gui.animate(hand, "position.y", from.y + off.y - 10, gui.EASING_INOUTSINE, 0.45, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
 	end
 end
 
-local function hide_popups()
-	local victory_panel = gui.get_node("panel_victory")
-	local defeat_panel = gui.get_node("panel_defeat")
-	gui.set_enabled(victory_panel, false)
-	gui.set_visible(victory_panel, false)
-	gui.set_enabled(defeat_panel, false)
-	gui.set_visible(defeat_panel, false)
-end
-
-local MAX_FLYING_COINS = 10
-
-local function spawn_flying_coins(self, amount, origin_pos)
-	self.active_coin_count = self.active_coin_count or 0
-	if self.active_coin_count >= MAX_FLYING_COINS then
+local function update_tutorial(self)
+	if battle_state.get_phase() ~= config.PHASE_PREP then
+		stop_hand(self)
 		return
 	end
-
-	local target_pos = vmath.vector3(32, 566, 0)
-	local start_x = 150
-	local start_y = 350
-	if origin_pos then
-		start_x = origin_pos.x or start_x
-		start_y = origin_pos.y or start_y
+	local step = tutorial.get_step()
+	if step == tutorial.STEP_BUY then
+		point_hand(self, node_to_gui(self, N("btn_melee")))
+		show_hint(i18n.get("TUT_BUY"))
+	elseif step == tutorial.STEP_MERGE then
+		local a = world_to_gui(self, vmath.vector3(config.COL_X[3], config.PLAYER_ROW_Y[4], 0))
+		local b = world_to_gui(self, vmath.vector3(config.COL_X[2], config.PLAYER_ROW_Y[4], 0))
+		point_hand(self, a, b)
+		show_hint(i18n.get("TUT_MERGE"))
+	elseif step == tutorial.STEP_BATTLE then
+		point_hand(self, node_to_gui(self, N("btn_fight")))
+		show_hint(i18n.get("TUT_FIGHT"))
+	else
+		stop_hand(self)
 	end
-
-	-- Cap coins spawned per burst to 1..3
-	local count = math.min(3, math.max(1, math.floor(amount / 5)))
-	-- Don't exceed maximum active coins
-	count = math.min(count, MAX_FLYING_COINS - self.active_coin_count)
-	if count <= 0 then return end
-
-	local template = gui.get_node("coin_template")
-	local icon = gui.get_node("icon_coin")
-
-	for i = 1, count do
-		self.active_coin_count = self.active_coin_count + 1
-		local coin_node = gui.clone(template)
-		gui.set_enabled(coin_node, true)
-		gui.set_visible(coin_node, true)
-
-		-- Random burst offset from origin
-		local angle = math.random() * math.pi * 2
-		local burst_radius = math.random(12, 30)
-		local burst_x = start_x + math.cos(angle) * burst_radius
-		local burst_y = start_y + math.sin(angle) * burst_radius
-
-		gui.set_position(coin_node, vmath.vector3(start_x, start_y, 0))
-		gui.set_scale(coin_node, vmath.vector3(0.1, 0.1, 1.0))
-
-		local delay = (i - 1) * 0.04
-		-- Initial burst & scale up
-		gui.animate(coin_node, "position", vmath.vector3(burst_x, burst_y, 0), gui.EASING_OUTQUAD, 0.18, delay, function()
-			-- Fly towards coin balance in top-left
-			local fly_duration = 0.35 + math.random() * 0.1
-			gui.animate(coin_node, "position", target_pos, gui.EASING_INQUAD, fly_duration, 0, function()
-				self.active_coin_count = math.max(0, self.active_coin_count - 1)
-				gui.delete_node(coin_node)
-				if not self.icon_punching then
-					self.icon_punching = true
-					gui.set_scale(icon, vmath.vector3(1.2, 1.2, 1.0))
-					gui.animate(icon, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBOUNCE, 0.15, 0, function()
-						self.icon_punching = false
-					end)
-				end
-			end)
-		end)
-		gui.animate(coin_node, "scale", vmath.vector3(0.85, 0.85, 1.0), gui.EASING_OUTBACK, 0.15, delay)
-	end
+	pulse(N("btn_fight"), step == tutorial.STEP_BATTLE, 1.08)
 end
 
-local FORCES_MAX_SCALE = 60.0
+-- =============================================================================
+-- POPUPS & TOASTS
+-- =============================================================================
+-- GUI rotation is a quaternion in Defold 1.14: always animate euler.z
+local function spin(node, period)
+	gui.cancel_animations(node, "euler.z")
+	gui.set_rotation(node, vmath.vector3(0, 0, 0))
+	gui.animate(node, "euler.z", -360, gui.EASING_LINEAR, period, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+end
 
-local function update_forces_bar(self, ratio)
-	ratio = math.max(0.0, math.min(1.0, ratio))
-	local player_scale_y = FORCES_MAX_SCALE * ratio
-	local enemy_scale_y = FORCES_MAX_SCALE * (1.0 - ratio)
+local function show_banner(self, text, is_boss)
+	local banner = N("banner")
+	gui.set_enabled(banner, true)
+	gui.set_text(N("txt_banner"), text)
+	gui.set_color(N("banner_icon"), is_boss and COLOR_SKULL or vmath.vector4(1, 0.65, 0.3, 1))
+	gui.cancel_animations(banner, gui.PROP_POSITION)
+	gui.set_position(banner, vmath.vector3(-200, 420, 0))
+	gui.animate(banner, gui.PROP_POSITION, vmath.vector3(150, 420, 0), gui.EASING_OUTBACK, 0.35, 0, function()
+		gui.animate(banner, gui.PROP_POSITION, vmath.vector3(520, 420, 0), gui.EASING_INBACK, 0.3, 0.9, function()
+			gui.set_enabled(banner, false)
+		end)
+	end)
+end
 
-	gui.set_scale(self.forces_player, vmath.vector3(2.0, player_scale_y, 1.0))
-	gui.set_scale(self.forces_enemy, vmath.vector3(2.0, enemy_scale_y, 1.0))
+local function show_new_tier(self, tier)
+	local toast = N("toast")
+	gui.set_enabled(toast, true)
+	gui.set_color(N("toast_badge"), config.get_tier_color(tier))
+	gui.set_text(N("txt_toast_tier"), tostring(tier))
+	gui.set_text(N("txt_toast"), i18n.get("NEW"))
+	spin(N("toast_rays"), 4)
+	pop(toast, 0.2, 1, 0.35)
+	if self.toast_timer then timer.cancel(self.toast_timer) end
+	self.toast_timer = timer.delay(1.5, false, function()
+		self.toast_timer = nil
+		gui.animate(toast, gui.PROP_SCALE, vmath.vector3(0.01, 0.01, 1), gui.EASING_INBACK, 0.2, 0, function()
+			gui.set_enabled(toast, false)
+		end)
+	end)
+end
+
+local function set_bottom_visible(self, visible)
+	local bottom = N("bottom")
+	gui.cancel_animations(bottom, "position.y")
+	gui.animate(bottom, "position.y", visible and BOTTOM_Y or -70, visible and gui.EASING_OUTBACK or gui.EASING_INBACK, 0.25)
 end
 
 local function on_phase_changed(self, phase)
-	local bottom_panel = gui.get_node("panel_bottom")
-	local victory_panel = gui.get_node("panel_victory")
-	local defeat_panel = gui.get_node("panel_defeat")
-
-	if phase == config.PHASE_PREP then
-		gui.set_visible(bottom_panel, true)
-		hide_popups()
-		update_tutorial_ui(self, tutorial.get_step())
-		update_economy_display(economy.get_displayed_coins(), economy.get_buy_cost())
-		if self.forces_node then
-			gui.set_visible(self.forces_node, false)
-			self.forces_ratio = 0.5
-			update_forces_bar(self, 0.5)
-		end
-	elseif phase == config.PHASE_BATTLE then
-		-- Bottom buttons hide during battle
-		gui.set_visible(bottom_panel, false)
-		hide_popups()
-		stop_hand_animation(self)
-		gui.set_text(gui.get_node("txt_tutorial_hint"), "")
-
-		-- Show forces balance bar during battle
-		if self.forces_node then
-			gui.set_visible(self.forces_node, true)
-			local r = battle_state.get_forces_ratio()
-			self.forces_ratio = r
-			update_forces_bar(self, r)
-		end
-	else
-		gui.set_visible(bottom_panel, false)
-		hide_popups()
-		stop_hand_animation(self)
-		if self.forces_node then
-			gui.set_visible(self.forces_node, false)
-			self.forces_ratio = 0.5
-			update_forces_bar(self, 0.5)
-		end
+	local prep = (phase == config.PHASE_PREP)
+	local battle = (phase == config.PHASE_BATTLE)
+	set_bottom_visible(self, prep)
+	gui.set_enabled(N("power"), prep)
+	gui.set_enabled(N("battle_bar"), battle)
+	gui.set_enabled(N("drum"), battle)
+	gui.set_enabled(N("txt_tap"), battle and battle_state.get_current_level() <= 6)
+	gui.set_text(N("txt_tap"), i18n.get("TAP"))
+	if battle then
+		self.forces_ratio = battle_state.get_forces_ratio()
+		pulse(N("txt_tap"), true, 1.15)
 	end
+	update_tutorial(self)
+end
+
+local function on_level_changed(self, level)
+	update_level_pill(self, level)
+	if levels.is_boss(level) or levels.is_mini_boss(level) then
+		show_banner(self, i18n.get("BOSS"), levels.is_boss(level))
+	end
+end
+
+-- =============================================================================
+-- FLYING COINS
+-- =============================================================================
+local function spawn_flying_coins(self, amount, origin)
+	if self.active_coins >= MAX_FLYING_COINS then return end
+	local start = origin and world_to_gui(self, origin) or vmath.vector3(150, 300, 0)
+	local target = node_to_gui(self, N("icon_coin"))
+	local count = math.min(3, math.max(1, math.floor(math.log(amount + 1) / math.log(4))))
+	count = math.min(count, MAX_FLYING_COINS - self.active_coins)
+	for i = 1, count do
+		self.active_coins = self.active_coins + 1
+		local coin = gui.clone(N("coin_fly"))
+		gui.set_enabled(coin, true)
+		gui.set_position(coin, start)
+		gui.set_scale(coin, vmath.vector3(0.2, 0.2, 1))
+		local a = math.random() * math.pi * 2
+		local burst = start + vmath.vector3(math.cos(a), math.sin(a), 0) * (10 + math.random() * 18)
+		local delay = (i - 1) * 0.05
+		gui.animate(coin, gui.PROP_SCALE, vmath.vector3(1, 1, 1), gui.EASING_OUTBACK, 0.16, delay)
+		gui.animate(coin, gui.PROP_POSITION, burst, gui.EASING_OUTQUAD, 0.16, delay, function()
+			gui.animate(coin, gui.PROP_POSITION, target, gui.EASING_INQUAD, 0.38 + math.random() * 0.1, 0, function()
+				gui.delete_node(coin)
+				self.active_coins = math.max(0, self.active_coins - 1)
+				pop(N("icon_coin"), 1.3, 1, 0.15)
+			end)
+		end)
+	end
+end
+
+-- =============================================================================
+-- BUTTONS
+-- =============================================================================
+local function busy()
+	return poki.is_ad_active()
+end
+
+local function on_buy(self, unit_type)
+	if busy() or battle_state.get_phase() ~= config.PHASE_PREP then return end
+	if economy.can_afford_buy() then
+		local ok = battle_state.buy_unit(unit_type)
+		if not ok then
+			pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
+		end
+	elseif can_offer_free_ad(self) then
+		poki.measure("ad", "free_squad", "interact")
+		poki.rewarded_break("small", function(success)
+			if success then
+				self.free_ad_ready_at = self.time + FREE_AD_COOLDOWN
+				battle_state.grant_free_squad(economy.get_shop_tier() + 1, unit_type)
+			end
+			self.dirty = true
+		end)
+	else
+		pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
+	end
+	self.dirty = true
 end
 
 function init(self)
 	msg.post(".", "acquire_input_focus")
 	self.druid = druid.new(self)
-
-	-- Explicitly disable and hide victory/defeat panels on start
-	hide_popups()
-
-	-- Forces balance bar
-	self.forces_node = gui.get_node("forces")
-	self.forces_bg = gui.get_node("forces_bg")
-	self.forces_enemy = gui.get_node("forces_enemy")
-	self.forces_player = gui.get_node("forces_player")
+	self.time = 0
+	self.free_ad_ready_at = 0
+	self.active_coins = 0
+	self.helper = N("coin_fly")
 	self.forces_ratio = 0.5
-	gui.set_visible(self.forces_node, false)
-	update_forces_bar(self, 0.5)
+	self.dirty = true
 
-	-- Localized static texts
-	gui.set_text(gui.get_node("txt_battle"), i18n.get("BATTLE"))
-	gui.set_text(gui.get_node("txt_reward"), i18n.get("REWARD"))
-	gui.set_text(gui.get_node("txt_merge"), i18n.get("AUTO_MERGE"))
+	self.druid:new_button("btn_melee", function() on_buy(self, config.UNIT_MELEE) end)
+	self.druid:new_button("btn_archer", function() on_buy(self, config.UNIT_ARCHER) end)
 
-	-- Button handlers
-	self.btn_buy = self.druid:new_button("btn_buy", function()
-		poki.on_player_input()
-		hide_popups()
-		battle_state.buy_unit()
+	self.druid:new_button("btn_merge", function()
+		if busy() then return end
+		if battle_state.auto_merge() then
+			pop(N("btn_merge"), 1.2, 1, 0.25)
+		else
+			pop(N("btn_merge"), 0.85, 1, 0.2)
+		end
+		self.dirty = true
 	end)
 
-	self.btn_merge = self.druid:new_button("btn_merge", function()
-		poki.on_player_input()
-		hide_popups()
-		local merged = battle_state.auto_merge()
-		local btn_merge_node = gui.get_node("btn_merge")
-		if merged then
-			-- Juicy feedback punch
-			gui.set_scale(btn_merge_node, vmath.vector3(1.15, 1.15, 1.0))
-			gui.animate(btn_merge_node, "scale", vmath.vector3(1.0, 1.0, 1.0), gui.EASING_OUTBOUNCE, 0.22)
-			pcall(function()
-				local cam = require("orthographic.camera")
-				cam.shake(hash("/camera"), 0.005, 0.08)
-			end)
-		else
-			-- Subtle horizontal wobble when nothing can be merged
-			gui.animate(btn_merge_node, "position.x", -33, gui.EASING_INOUTSINE, 0.05, 0, function()
-				gui.animate(btn_merge_node, "position.x", -41, gui.EASING_INOUTSINE, 0.05, 0, function()
-					gui.animate(btn_merge_node, "position.x", -37, gui.EASING_OUTSINE, 0.05)
-				end)
-			end)
+	self.druid:new_button("btn_fight", function()
+		if busy() then return end
+		if not battle_state.start_battle() then
+			pop(N("btn_fight"), 0.85, 1, 0.2)
 		end
 	end)
 
-	self.btn_reward = self.druid:new_button("btn_reward", function()
-		poki.on_player_input()
-		hide_popups()
-		if not tutorial.is_completed() then return end
-		if not grid.find_first_empty_player_cell() then return end
-		poki.rewarded_break("small", function(success)
-			if success then
-				battle_state.reward_buy_unit()
-			end
-		end)
+	economy.on_earn(function(amount, origin)
+		self.pending_coins = self.pending_coins or {}
+		table.insert(self.pending_coins, { amount = amount, origin = origin })
+	end)
+	economy.on_change(function() self.dirty = true end)
+	tutorial.on_change(function() self.tutorial_dirty = true end)
+	battle_state.on_new_tier(function(tier)
+		self.pending_tier = math.max(self.pending_tier or 0, tier)
 	end)
 
-	self.btn_battle = self.druid:new_button("btn_battle", function()
-		poki.on_player_input()
-		hide_popups()
-		battle_state.start_battle()
-	end)
-
-	self.btn_next = self.druid:new_button("btn_next", function()
-		poki.on_player_input()
-		if self.auto_timer then timer.cancel(self.auto_timer) end
-		hide_popups()
-		poki.commercial_break(function()
-			battle_state.start_level(battle_state.get_current_level() + 1)
-		end)
-	end)
-
-	self.btn_retry = self.druid:new_button("btn_retry", function()
-		poki.on_player_input()
-		hide_popups()
-		poki.commercial_break(function()
-			battle_state.start_level(battle_state.get_current_level())
-		end)
-	end)
-
-	self.pending_earn_events = {}
-
-	economy.on_earn(function(amount, origin_pos)
-		table.insert(self.pending_earn_events, { amount = amount, origin_pos = origin_pos })
-	end)
-
-	-- Subscriptions set dirty flag so GUI mutations run strictly in .gui_script update(dt)
-	self.dirty_ui = true
-	self.last_step = tutorial.get_step()
-	self.last_coins = economy.get_displayed_coins()
-	self.last_cost = economy.get_buy_cost()
-	self.last_level = battle_state.get_current_level()
-	self.last_phase = battle_state.get_phase()
-
-	economy.on_change(function()
-		self.dirty_ui = true
-	end)
-
-	battle_state.on_phase_change(function()
-		self.dirty_ui = true
-	end)
-
-	battle_state.on_level_change(function()
-		self.dirty_ui = true
-	end)
-
-	tutorial.on_change(function()
-		self.dirty_ui = true
-	end)
+	gui.set_enabled(N("toast"), false)
+	gui.set_enabled(N("banner"), false)
+	stop_hand(self)
+	self.last_phase = nil
+	self.last_level = nil
 end
 
 function final(self)
 	msg.post(".", "release_input_focus")
-	if self.auto_timer then timer.cancel(self.auto_timer) end
 	self.druid:final()
 end
 
 function update(self, dt)
+	self.time = self.time + dt
 	self.druid:update(dt)
 	economy.update(dt)
 
-	local cur_step = tutorial.get_step()
-	local cur_coins = economy.get_displayed_coins()
-	local cur_cost = economy.get_buy_cost()
-	local cur_level = battle_state.get_current_level()
-	local cur_phase = battle_state.get_phase()
-	local cur_can_merge = battle_state.can_auto_merge()
+	local phase = battle_state.get_phase()
+	local level = battle_state.get_current_level()
 
-	if self.dirty_ui or cur_level ~= self.last_level then
-		self.last_level = cur_level
-		update_level_display(cur_level)
+	if level ~= self.last_level then
+		self.last_level = level
+		on_level_changed(self, level)
+		self.dirty = true
+	end
+	if phase ~= self.last_phase then
+		self.last_phase = phase
+		on_phase_changed(self, phase)
+		self.dirty = true
 	end
 
-	if self.dirty_ui or cur_coins ~= self.last_coins or cur_cost ~= self.last_cost or cur_can_merge ~= self.last_can_merge then
-		self.last_coins = cur_coins
-		self.last_cost = cur_cost
-		self.last_can_merge = cur_can_merge
-		update_economy_display(cur_coins, cur_cost)
+	-- Cheap periodic refresh catches cooldowns and grid changes
+	self.refresh_timer = (self.refresh_timer or 0) - dt
+	if self.refresh_timer <= 0 then
+		self.refresh_timer = 0.25
+		self.dirty = true
+	end
+	if self.dirty and phase == config.PHASE_PREP then
+		self.dirty = false
+		refresh_hud(self)
+	elseif self.dirty then
+		self.dirty = false
+		gui.set_text(N("txt_coins"), format_number(economy.get_displayed_coins()))
 	end
 
-	if self.dirty_ui or cur_step ~= self.last_step then
-		self.last_step = cur_step
-		update_tutorial_ui(self, cur_step)
+	if self.tutorial_dirty then
+		self.tutorial_dirty = false
+		update_tutorial(self)
 	end
 
-	if self.dirty_ui or cur_phase ~= self.last_phase then
-		self.last_phase = cur_phase
-		on_phase_changed(self, cur_phase)
+	if self.pending_tier then
+		show_new_tier(self, self.pending_tier)
+		self.pending_tier = nil
 	end
 
-	self.dirty_ui = false
-
-	-- Forces balance bar update during battle
-	if cur_phase == config.PHASE_BATTLE and self.forces_node then
-		local target_ratio = battle_state.get_forces_ratio()
-		self.forces_ratio = (self.forces_ratio or target_ratio) + (target_ratio - (self.forces_ratio or target_ratio)) * math.min(1.0, dt * 10.0)
-		update_forces_bar(self, self.forces_ratio)
+	if phase == config.PHASE_BATTLE then
+		local target = battle_state.get_forces_ratio()
+		self.forces_ratio = self.forces_ratio + (target - self.forces_ratio) * math.min(1, dt * 8)
+		local w = 200
+		gui.set_size(N("bar_player"), vmath.vector3(math.max(4, w * self.forces_ratio), 8, 0))
+		gui.set_size(N("bar_enemy"), vmath.vector3(math.max(4, w * (1 - self.forces_ratio)), 8, 0))
+		local rage = battle_state.get_rage_drum_level()
+		gui.set_color(N("drum_glow"), vmath.vector4(1, 0.71, 0.18, rage * 0.9))
+		local s = 1 + rage * 0.35
+		gui.set_scale(N("drum_icon"), vmath.vector3(s, s, 1))
 	end
 
-	-- Drum of Rage visual banner / indicator in battle
-	if cur_phase == config.PHASE_BATTLE then
-		local hint = gui.get_node("txt_tutorial_hint")
-		local is_raging = battle_state.get_rage_drum_active()
-		if is_raging then
-			if not self.rage_ui_active then
-				self.rage_ui_active = true
-				self.rage_sway_time = 0
-				gui.set_text(hint, i18n.get("DRUM_OF_RAGE"))
-				-- Soft semi-transparent amber-gold banner without harsh orange
-				gui.set_color(hint, vmath.vector4(1.0, 0.82, 0.35, 0.65))
-				gui.set_position(hint, vmath.vector3(0, 160, 0)) -- Shifted up towards top field (y=337.5 + 160 = ~497.5)
-				gui.set_scale(hint, vmath.vector3(0.50, 0.50, 1.0))
-			end
-			-- Continuous smooth sway and subtle floating bounce while active
-			self.rage_sway_time = (self.rage_sway_time or 0) + dt
-			local sway_angle = math.sin(self.rage_sway_time * 7.5) * 3.5
-			local bob_y = 160 + math.sin(self.rage_sway_time * 6.0) * 4.0
-			gui.set_rotation(hint, vmath.vector3(0, 0, sway_angle))
-			gui.set_position(hint, vmath.vector3(0, bob_y, 0))
-		else
-			if self.rage_ui_active then
-				self.rage_ui_active = false
-				gui.set_text(hint, "")
-				gui.set_color(hint, vmath.vector4(0.0, 0.95, 0.4, 1.0))
-				gui.set_scale(hint, vmath.vector3(0.46, 0.46, 1.0))
-				gui.set_rotation(hint, vmath.vector3(0, 0, 0))
-				gui.set_position(hint, vmath.vector3(0, 0, 0))
-			end
+	if self.pending_coins and #self.pending_coins > 0 then
+		local total, origin = 0, nil
+		for _, ev in ipairs(self.pending_coins) do
+			total = total + ev.amount
+			origin = ev.origin or origin
 		end
-	else
-		if self.rage_ui_active then
-			self.rage_ui_active = false
-			local hint = gui.get_node("txt_tutorial_hint")
-			gui.set_rotation(hint, vmath.vector3(0, 0, 0))
-			gui.set_position(hint, vmath.vector3(0, 0, 0))
-		end
-	end
-
-	if self.pending_earn_events and #self.pending_earn_events > 0 then
-		local total_amount = 0
-		local last_pos = nil
-		while #self.pending_earn_events > 0 do
-			local ev = table.remove(self.pending_earn_events, 1)
-			total_amount = total_amount + (ev.amount or 1)
-			last_pos = ev.origin_pos or last_pos
-		end
-		if total_amount > 0 then
-			spawn_flying_coins(self, total_amount, last_pos)
-		end
+		self.pending_coins = {}
+		spawn_flying_coins(self, total, origin)
 	end
 end
 
 function on_message(self, message_id, message, sender)
+	if message_id == hash("drag") then
+		local prep = battle_state.get_phase() == config.PHASE_PREP
+		gui.set_enabled(N("power"), prep and not message.active)
+		if message.active then stop_hand(self) else self.tutorial_dirty = true end
+	end
 	self.druid:on_message(message_id, message, sender)
 end
 

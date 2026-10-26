@@ -3,53 +3,18 @@ local config = require("main.modules.config")
 go.property("team", hash("player"))
 
 function init(self)
-	local is_player = (self.team == hash("player"))
-	self.base_bg = is_player and config.COLOR_CELL_PLAYER_BG or config.COLOR_CELL_ENEMY_BG
-	self.base_border = is_player and config.COLOR_CELL_PLAYER_BORDER or config.COLOR_CELL_ENEMY_BORDER
-
-	go.set("#bg", "tint", self.base_bg)
-	go.set("#sprite", "tint", self.base_border)
+	self.base = (self.team == hash("player")) and config.COLOR_CELL_PLAYER or config.COLOR_CELL_ENEMY
+	go.set("#sprite", "tint", self.base)
 end
 
 function on_message(self, message_id, message, sender)
-	if message_id == hash("highlight") then
-		local tint = message.tint or config.COLOR_CELL_HIGHLIGHT
-		go.set("#sprite", "tint", tint)
-		go.animate("#sprite", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(2.22, 2.22, 1.0), go.EASING_INOUTSINE, 0.28)
-	elseif message_id == hash("reset") then
-		go.cancel_animations("#sprite", "scale")
-		go.set("#sprite", "scale", vmath.vector3(2.15, 2.15, 1.0))
-		go.set("#bg", "tint", self.base_bg)
-		go.set("#sprite", "tint", self.base_border)
-	elseif message_id == hash("hide") then
-		go.cancel_animations("#sprite", "scale")
-		local duration = message.duration or 0.18
-		if duration > 0 then
-			local transparent_bg = vmath.vector4(self.base_bg.x, self.base_bg.y, self.base_bg.z, 0)
-			local transparent_border = vmath.vector4(self.base_border.x, self.base_border.y, self.base_border.z, 0)
-			go.animate("#bg", "tint", go.PLAYBACK_ONCE_FORWARD, transparent_bg, go.EASING_INQUAD, duration)
-			go.animate("#sprite", "tint", go.PLAYBACK_ONCE_FORWARD, transparent_border, go.EASING_INQUAD, duration, 0, function()
-				msg.post("#bg", "disable")
-				msg.post("#sprite", "disable")
-			end)
-		else
-			msg.post("#bg", "disable")
-			msg.post("#sprite", "disable")
-		end
+	local duration = message.duration or 0.2
+	if message_id == hash("hide") then
+		local b = self.base
+		go.cancel_animations("#sprite", "tint")
+		go.animate("#sprite", "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(b.x, b.y, b.z, 0), go.EASING_INQUAD, duration)
 	elseif message_id == hash("show") then
-		msg.post("#bg", "enable")
-		msg.post("#sprite", "enable")
-		local duration = message.duration or 0.2
-		if duration > 0 then
-			local transparent_bg = vmath.vector4(self.base_bg.x, self.base_bg.y, self.base_bg.z, 0)
-			local transparent_border = vmath.vector4(self.base_border.x, self.base_border.y, self.base_border.z, 0)
-			go.set("#bg", "tint", transparent_bg)
-			go.set("#sprite", "tint", transparent_border)
-			go.animate("#bg", "tint", go.PLAYBACK_ONCE_FORWARD, self.base_bg, go.EASING_OUTQUAD, duration)
-			go.animate("#sprite", "tint", go.PLAYBACK_ONCE_FORWARD, self.base_border, go.EASING_OUTQUAD, duration)
-		else
-			go.set("#bg", "tint", self.base_bg)
-			go.set("#sprite", "tint", self.base_border)
-		end
+		go.cancel_animations("#sprite", "tint")
+		go.animate("#sprite", "tint", go.PLAYBACK_ONCE_FORWARD, self.base, go.EASING_OUTQUAD, duration)
 	end
 end
