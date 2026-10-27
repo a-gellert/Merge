@@ -32,11 +32,14 @@ local time_scale = 1
 local last_result = nil
 local kill_coins_this_battle = 0
 
-local rage_buff_timer = 0
-local RAGE_MAX = 1.4
-local RAGE_PER_TAP = 0.35
-local RAGE_ATTACK_MULT = 1.25
-local RAGE_SPEED_MULT = 1.15
+-- Tapping the field during battle: game speed eases up to 2x, player damage +15%
+local tap_timer = 0       -- seconds left until the boost starts fading
+local boost = 0           -- 0..1, eased
+local TAP_HOLD = 0.45
+local BOOST_RISE = 1.1    -- per second (0 -> 1 takes about 0.9 s)
+local BOOST_FALL = 1.8
+local BOOST_SPEED = 1     -- extra speed at full boost (1 + 1 = 2x)
+local BOOST_DAMAGE = 1.15
 
 local SUDDEN_DEATH_TIME = 40 -- after this many battle seconds damage ramps up
 local KILL_SHARE = 0.45      -- share of level income paid for kills (kept on defeat)
@@ -80,8 +83,8 @@ function M.get_consecutive_losses() return consecutive_losses end
 function M.get_last_result() return last_result end
 function M.get_time_scale() return time_scale end
 function M.get_battle_time() return battle_time end
-function M.get_rage_drum_active() return rage_buff_timer > 0 end
-function M.get_rage_drum_level() return rage_buff_timer / RAGE_MAX end
+function M.get_rage_drum_active() return tap_timer > 0 end
+function M.get_rage_drum_level() return boost end
 
 -- Enemy HP shrinks a bit after each loss on the same level (hidden pity, min 70%)
 local function get_pity_mult()
@@ -451,7 +454,7 @@ end
 -- is_resume: continuing a saved session (no new loot, keeps per-level shop prices)
 function M.start_level(level_num, is_retry, is_resume)
 	current_level = level_num or current_level
-	rage_buff_timer = 0
+	tap_timer, boost = 0, 0
 	battle_time = 0
 	finale = nil
 	time_scale = 1
@@ -765,7 +768,7 @@ end
 -- =============================================================================
 function M.tap_battle_drum(tap_pos)
 	if phase ~= config.PHASE_BATTLE or finale then return false end
-	rage_buff_timer = math.min(RAGE_MAX, rage_buff_timer + RAGE_PER_TAP)
+	tap_timer = TAP_HOLD
 	if tap_pos then
 		view("play_effect", "drum_tap", tap_pos)
 	end
@@ -942,7 +945,15 @@ function M.update_battle(real_dt)
 		end
 	end
 
-	local dt = real_dt * time_scale
+	if tap_timer > 0 and not finale then
+		tap_timer = tap_timer - real_dt
+		boost = math.min(1, boost + real_dt * BOOST_RISE)
+	else
+		tap_timer = 0
+		boost = math.max(0, boost - real_dt * BOOST_FALL)
+	end
+
+	local dt = real_dt * time_scale * (1 + boost * BOOST_SPEED)
 	battle_time = battle_time + dt
 
 	if not finale then
@@ -956,10 +967,7 @@ function M.update_battle(real_dt)
 		end
 	end
 
-	if rage_buff_timer > 0 then
-		rage_buff_timer = math.max(0, rage_buff_timer - dt)
-	end
-	local drum = rage_buff_timer > 0
+	local drum = boost > 0.05
 	local overtime = 1
 	if battle_time > SUDDEN_DEATH_TIME then
 		overtime = 1 + (battle_time - SUDDEN_DEATH_TIME) * 0.15
@@ -971,8 +979,8 @@ function M.update_battle(real_dt)
 		local list = (g == 1) and player_squads or enemy_squads
 		local foes = (g == 1) and enemy_squads or player_squads
 		local is_player = (g == 1)
-		local atk_mult = (is_player and drum) and RAGE_ATTACK_MULT or 1
-		local spd_mult = (is_player and drum) and RAGE_SPEED_MULT or 1
+		local atk_mult = (is_player and drum) and BOOST_DAMAGE or 1
+		local spd_mult = 1
 
 		for _, squad in ipairs(list) do
 			if squad.is_alive then

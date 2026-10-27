@@ -58,10 +58,6 @@ function on_input(self, action_id, action)
 		if phase == config.PHASE_BATTLE and action.pressed then
 			local world_pos = get_world_pos(self, action)
 			battle_state.tap_battle_drum(world_pos)
-			-- Subtle punchy screen shake (clicker feel)
-			if camera and camera.shake then
-				camera.shake(self.camera_id, 0.003, 0.06)
-			end
 			return true
 		end
 		return false

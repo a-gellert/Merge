@@ -19,6 +19,7 @@ local action_queue = {}
 local fx_pool = {}
 local fx_cursor = 1
 local now = 0
+local now_shake = 0
 local frame_budget = { slash = 0, coin = 0, arrow = 0, dust = 0 }
 
 local GOLD = vmath.vector4(1.0, 0.84, 0.25, 1)
@@ -519,6 +520,15 @@ function update(self, dt)
 	frame_budget.slash, frame_budget.coin, frame_budget.arrow, frame_budget.dust = 0, 0, 0, 0
 	process_queue()
 	battle_state.update_battle(dt)
+	-- Light continuous rumble while the tap boost is on
+	local boost = battle_state.get_rage_drum_level()
+	if boost > 0.05 then
+		now_shake = (now_shake or 0) - dt
+		if now_shake <= 0 then
+			now_shake = 0.07
+			shake(0.0015 + boost * 0.0025, 0.09)
+		end
+	end
 	if self.autoplay then
 		local t = socket.gettime()
 		self.perf_start = self.perf_start or t

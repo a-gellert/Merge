@@ -11,6 +11,7 @@ local camera = nil
 pcall(function() camera = require("orthographic.camera") end)
 local CAMERA_ID = hash("/camera")
 
+local AD_MISCLICK_DELAY = 3 -- seconds the free-squad button stays locked after it appears
 local FREE_AD_COOLDOWN = 45   -- seconds between "free squad" rewarded offers
 local FREE_AD_MIN_LEVEL = 3
 local MAX_FLYING_COINS = 14
@@ -106,7 +107,7 @@ local function wiggle(node, on)
 	end
 end
 
-local function update_buy_button(self, prefix, base_color, offer_ad)
+local function update_buy_button(self, prefix, base_color, offer_ad, locked)
 	local btn = N(prefix)
 	local affordable = economy.can_afford_buy()
 	local has_cell = battle_state.has_free_cell()
@@ -122,13 +123,13 @@ local function update_buy_button(self, prefix, base_color, offer_ad)
 
 	local color = base_color
 	if offer_ad then
-		color = COLOR_AD
+		color = locked and COLOR_OFF or COLOR_AD
 	elseif not (affordable and has_cell) then
 		color = COLOR_OFF
 	end
 	gui.set_color(btn, color)
 
-	local ready = offer_ad or (affordable and has_cell)
+	local ready = (offer_ad and not locked) or (affordable and has_cell)
 	local key = "ready_" .. prefix
 	if ready ~= self[key] then
 		self[key] = ready
@@ -159,8 +160,14 @@ local function refresh_hud(self)
 	gui.set_text(N("txt_coins"), format_number(economy.get_displayed_coins()))
 
 	local offer_ad = can_offer_free_ad(self)
-	update_buy_button(self, "btn_melee", COLOR_MELEE, offer_ad)
-	update_buy_button(self, "btn_archer", COLOR_ARCHER, offer_ad)
+	if offer_ad and not self.ad_seen then
+		self.ad_unlock_at = self.time + AD_MISCLICK_DELAY
+	end
+	self.ad_seen = offer_ad
+	local locked = offer_ad and self.time < self.ad_unlock_at
+	self.ad_locked = locked
+	update_buy_button(self, "btn_melee", COLOR_MELEE, offer_ad, locked)
+	update_buy_button(self, "btn_archer", COLOR_ARCHER, offer_ad, locked)
 	if offer_ad ~= self.offer_ad then
 		self.offer_ad = offer_ad
 		pulse(N("btn_melee"), offer_ad, 1.05)
@@ -350,7 +357,7 @@ local function on_buy(self, unit_type)
 		else
 			pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
 		end
-	elseif can_offer_free_ad(self) then
+	elseif can_offer_free_ad(self) and self.ad_seen and not self.ad_locked then
 		poki.measure("ad", "free_squad", "interact")
 		poki.rewarded_break("small", function(success)
 			if success then
@@ -370,6 +377,9 @@ function init(self)
 	self.druid = druid.new(self)
 	self.time = 0
 	self.free_ad_ready_at = 0
+	self.ad_unlock_at = 0
+	self.ad_seen = false
+	self.ad_locked = false
 	self.active_coins = 0
 	self.helper = N("coin_fly")
 	self.forces_ratio = 0.5
