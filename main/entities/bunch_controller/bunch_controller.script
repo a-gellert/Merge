@@ -28,12 +28,97 @@ local function set_badge_visible(self, visible)
 	msg.post("#tier_label_e", (visible and enemy) and "enable" or "disable")
 end
 
+local SWORD_REST_POS = vmath.vector3(8.5, 0.5, 0.02)
+local SWORD_REST_ANGLE = -15
+local BOW_REST_POS = vmath.vector3(0, 7.0, 0.02)
+local BOW_REST_ANGLE = 0
+
 local function clear_warriors(self)
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
+		if w.weapon_id and go.exists(w.weapon_id) then go.delete(w.weapon_id) end
 		if go.exists(w.id) then go.delete(w.id) end
 	end
 	self.warriors = {}
+end
+
+-- Sword swinging animations: varied slashes, chops and thrusts
+local function play_sword_swing(w, delay, swing_type)
+	local s_id = w.weapon_id
+	if not s_id or not go.exists(s_id) then return end
+	go.cancel_animations(s_id, "position")
+	go.cancel_animations(s_id, "euler.z")
+
+	if swing_type == 1 then
+		-- Wide slash: wind-up back, then whip across with forward lunge, then recover
+		go.set(s_id, "euler.z", SWORD_REST_ANGLE)
+		go.set_position(SWORD_REST_POS, s_id)
+		go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, -55, go.EASING_INQUAD, 0.05, delay, function()
+			if not go.exists(s_id) or not w.alive then return end
+			go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(6.5, 5.0, 0.02), go.EASING_OUTQUAD, 0.09)
+			go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, 70, go.EASING_OUTQUAD, 0.09, 0, function()
+				if not go.exists(s_id) or not w.alive then return end
+				go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_POS, go.EASING_OUTSINE, 0.12)
+				go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_ANGLE, go.EASING_OUTSINE, 0.12)
+			end)
+		end)
+	elseif swing_type == 2 then
+		-- Overhead chop: raise high, chop down and push forward, then recover
+		go.set(s_id, "euler.z", SWORD_REST_ANGLE)
+		go.set_position(SWORD_REST_POS, s_id)
+		go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, 30, go.EASING_INQUAD, 0.05, delay, function()
+			if not go.exists(s_id) or not w.alive then return end
+			go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(7.5, 6.5, 0.02), go.EASING_OUTQUAD, 0.08)
+			go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, -45, go.EASING_OUTQUAD, 0.08, 0, function()
+				if not go.exists(s_id) or not w.alive then return end
+				go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_POS, go.EASING_OUTSINE, 0.12)
+				go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_ANGLE, go.EASING_OUTSINE, 0.12)
+			end)
+		end)
+	else
+		-- Thrust & sweep: thrust straight forward, then sweep outward
+		go.set(s_id, "euler.z", SWORD_REST_ANGLE)
+		go.set_position(SWORD_REST_POS, s_id)
+		go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(8.0, 8.0, 0.02), go.EASING_OUTQUAD, 0.08, delay)
+		go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, 15, go.EASING_OUTQUAD, 0.08, delay, function()
+			if not go.exists(s_id) or not w.alive then return end
+			go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, 60, go.EASING_OUTQUAD, 0.07, 0, function()
+				if not go.exists(s_id) or not w.alive then return end
+				go.animate(s_id, "position", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_POS, go.EASING_OUTSINE, 0.11)
+				go.animate(s_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_ANGLE, go.EASING_OUTSINE, 0.11)
+			end)
+		end)
+	end
+end
+
+-- Bow shooting animation: tension draw & aim, snap release with kick/recoil, return to rest
+local function play_bow_shoot(w, delay)
+	local b_id = w.weapon_id
+	if not b_id or not go.exists(b_id) then return end
+	go.cancel_animations(b_id, "position")
+	go.cancel_animations(b_id, "scale")
+	go.cancel_animations(b_id, "euler.z")
+
+	local aim_tilt = (math.random() - 0.5) * 12
+	go.set_position(BOW_REST_POS, b_id)
+	go.set(b_id, "euler.z", 0)
+	go.set_scale(vmath.vector3(1, 1, 1), b_id)
+
+	-- 1. Draw back & aim (tension)
+	go.animate(b_id, "position.y", go.PLAYBACK_ONCE_FORWARD, 4.0, go.EASING_INQUAD, 0.08, delay)
+	go.animate(b_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.9, 1.15, 1), go.EASING_INQUAD, 0.08, delay)
+	go.animate(b_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, aim_tilt, go.EASING_INQUAD, 0.08, delay, function()
+		if not go.exists(b_id) or not w.alive then return end
+		-- 2. Release & forward kick / recoil
+		go.animate(b_id, "position.y", go.PLAYBACK_ONCE_FORWARD, 11.0, go.EASING_OUTQUAD, 0.06)
+		go.animate(b_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.18, 0.88, 1), go.EASING_OUTQUAD, 0.06, 0, function()
+			if not go.exists(b_id) or not w.alive then return end
+			-- 3. Settle back to rest
+			go.animate(b_id, "position", go.PLAYBACK_ONCE_FORWARD, BOW_REST_POS, go.EASING_OUTSINE, 0.14)
+			go.animate(b_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1, 1, 1), go.EASING_OUTSINE, 0.14)
+			go.animate(b_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_OUTSINE, 0.14)
+		end)
+	end)
 end
 
 -- Warrior offset rotated by the squad's current turn (formation turns as a whole)
@@ -89,17 +174,39 @@ local function setup_visuals(self, data)
 	local flip = is_enemy and -1 or 1
 
 	local factory_url = (data.unit_type == config.UNIT_ARCHER) and "#archer_factory" or "#melee_factory"
+	local is_melee = (data.unit_type ~= config.UNIT_ARCHER)
 	local my_id = go.get_id()
 	local base_q = vmath.quat_rotation_z(self.base_rot)
+	local sword_rest_q = vmath.quat_rotation_z(SWORD_REST_ANGLE * math.pi / 180)
+	local bow_rest_q = vmath.quat()
 	for i = 1, #offsets do
 		local o = offsets[i]
 		local off = vmath.vector3(o.x, o.y * flip, o.z)
 		local w_id = factory.create(factory_url, nil, nil, nil, self.warrior_scale)
 		go.set_parent(w_id, my_id, false)
 		go.set_rotation(base_q, w_id)
+		local weapon_id, weapon_url, weapon_type
+		if is_melee then
+			weapon_type = "sword"
+			weapon_id = factory.create("#sword_factory")
+			go.set_parent(weapon_id, w_id, false)
+			go.set_position(SWORD_REST_POS, weapon_id)
+			go.set_rotation(sword_rest_q, weapon_id)
+			weapon_url = sprite_url(weapon_id)
+		else
+			weapon_type = "bow"
+			weapon_id = factory.create("#bow_factory")
+			go.set_parent(weapon_id, w_id, false)
+			go.set_position(BOW_REST_POS, weapon_id)
+			go.set_rotation(bow_rest_q, weapon_id)
+			weapon_url = sprite_url(weapon_id)
+		end
 		local w = {
 			id = w_id,
 			url = sprite_url(w_id),
+			weapon_id = weapon_id,
+			weapon_url = weapon_url,
+			weapon_type = weapon_type,
 			base_offset = off,
 			phase = math.random() * math.pi * 2,
 			speed = 2.0 + math.random() * 1.5,
@@ -107,6 +214,7 @@ local function setup_visuals(self, data)
 			chaos = 0.8 + math.random() * 0.9,
 			flank = (o.x > 2 and 1) or (o.x < -2 and -1) or 0,
 			busy_until = 0,
+			weapon_busy_until = 0,
 		}
 		go.set(w.url, "tint", self.base_tint)
 		-- Juicy entrance: merge bursts out of the center, a fresh squad pops in one by one
@@ -118,6 +226,15 @@ local function setup_visuals(self, data)
 			go.set_position(off, w_id)
 			go.set_scale(vmath.vector3(0.01, 0.01, 1), w_id)
 			go.animate(w_id, "scale", go.PLAYBACK_ONCE_FORWARD, self.warrior_scale, go.EASING_OUTBACK, 0.24, delay)
+		end
+		if weapon_id then
+			if is_melee then
+				go.set(weapon_id, "euler.z", -75)
+				go.animate(weapon_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_ANGLE, go.EASING_OUTBACK, 0.26, delay)
+			else
+				go.set_position(vmath.vector3(0, 0, 0.02), weapon_id)
+				go.animate(weapon_id, "position", go.PLAYBACK_ONCE_FORWARD, BOW_REST_POS, go.EASING_OUTBACK, 0.26, delay)
+			end
 		end
 		w.busy_until = self.time + delay + 0.34
 		table.insert(self.warriors, w)
@@ -146,7 +263,12 @@ local function flash(self, tint, duration)
 	self.flash_cd = FLASH_COOLDOWN
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
-		if w.alive then go.set(w.url, "tint", tint or WHITE) end
+		if w.alive then
+			go.set(w.url, "tint", tint or WHITE)
+			if w.weapon_url and go.exists(w.weapon_id) then
+				go.set(w.weapon_url, "tint", tint or WHITE)
+			end
+		end
 	end
 end
 
@@ -161,12 +283,23 @@ local function kill_warrior(self, w)
 	local target = vmath.vector3(p.x + bx * push + (math.random() - 0.5) * 18, p.y + by * push + (math.random() - 0.5) * 18, p.z)
 	go.cancel_animations(w.id, "position")
 	go.cancel_animations(w.id, "scale")
+	if w.weapon_id and go.exists(w.weapon_id) then
+		go.cancel_animations(w.weapon_id, "position")
+		go.cancel_animations(w.weapon_id, "euler.z")
+		-- Weapon spins and flies out as warrior falls
+		local off_x = (w.weapon_type == "sword") and (14 + math.random() * 8) or ((math.random() - 0.5) * 20)
+		local off_y = (w.weapon_type == "sword") and (math.random() * 10 - 5) or (12 + math.random() * 8)
+		go.animate(w.weapon_id, "position", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(off_x, off_y, 0.02), go.EASING_OUTQUAD, 0.32)
+		go.animate(w.weapon_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, (math.random() > 0.5 and 1 or -1) * 360, go.EASING_OUTQUAD, 0.32)
+		go.animate(w.weapon_url, "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(1, 1, 1, 0), go.EASING_INQUAD, 0.32)
+	end
 	go.animate(w.id, "position", go.PLAYBACK_ONCE_FORWARD, target, go.EASING_OUTQUAD, 0.32)
 	go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_FORWARD, self.face * DEG + (math.random() > 0.5 and 1 or -1) * 300, go.EASING_OUTQUAD, 0.32)
 	go.set(w.url, "tint", WHITE)
 	go.animate(w.url, "tint", go.PLAYBACK_ONCE_FORWARD, vmath.vector4(0.3, 0.3, 0.35, 0), go.EASING_INQUAD, 0.32, 0, function()
-		if not w.alive and go.exists(w.id) then
-			msg.post(w.id, "disable")
+		if not w.alive then
+			if go.exists(w.id) then msg.post(w.id, "disable") end
+			if w.weapon_id and go.exists(w.weapon_id) then msg.post(w.weapon_id, "disable") end
 		end
 	end)
 end
@@ -184,7 +317,26 @@ local function revive_warrior(self, w, delay)
 	go.set_rotation(vmath.quat_rotation_z(self.base_rot), w.id)
 	go.set_scale(vmath.vector3(0.01, 0.01, 1), w.id)
 	go.animate(w.id, "scale", go.PLAYBACK_ONCE_FORWARD, self.warrior_scale, go.EASING_OUTBACK, 0.25, delay)
+	if w.weapon_id and go.exists(w.weapon_id) then
+		msg.post(w.weapon_id, "enable")
+		go.cancel_animations(w.weapon_id, "position")
+		go.cancel_animations(w.weapon_id, "euler.z")
+		go.cancel_animations(w.weapon_id, "scale")
+		go.cancel_animations(w.weapon_url, "tint")
+		go.set(w.weapon_url, "tint", WHITE)
+		go.set_scale(vmath.vector3(1, 1, 1), w.weapon_id)
+		if w.weapon_type == "sword" then
+			go.set_position(SWORD_REST_POS, w.weapon_id)
+			go.set(w.weapon_id, "euler.z", -75)
+			go.animate(w.weapon_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, SWORD_REST_ANGLE, go.EASING_OUTBACK, 0.25, delay)
+		else
+			go.set_position(vmath.vector3(0, 0, 0.02), w.weapon_id)
+			go.set(w.weapon_id, "euler.z", 0)
+			go.animate(w.weapon_id, "position", go.PLAYBACK_ONCE_FORWARD, BOW_REST_POS, go.EASING_OUTBACK, 0.25, delay)
+		end
+	end
 	w.busy_until = self.time + delay + 0.27
+	w.weapon_busy_until = 0
 	w.rot = nil
 end
 
@@ -213,6 +365,21 @@ local function replenish_all(self, data)
 			go.cancel_animations(w.id, "scale")
 			go.set(w.url, "tint", self.base_tint)
 			go.set_scale(self.warrior_scale, w.id)
+			if w.weapon_id and go.exists(w.weapon_id) then
+				go.cancel_animations(w.weapon_id, "position")
+				go.cancel_animations(w.weapon_id, "euler.z")
+				go.cancel_animations(w.weapon_id, "scale")
+				go.cancel_animations(w.weapon_url, "tint")
+				go.set(w.weapon_url, "tint", WHITE)
+				go.set_scale(vmath.vector3(1, 1, 1), w.weapon_id)
+				if w.weapon_type == "sword" then
+					go.set_position(SWORD_REST_POS, w.weapon_id)
+					go.set(w.weapon_id, "euler.z", SWORD_REST_ANGLE)
+				else
+					go.set_position(BOW_REST_POS, w.weapon_id)
+					go.set(w.weapon_id, "euler.z", BOW_REST_ANGLE)
+				end
+			end
 			-- shortest way back to the base heading
 			local cur = go.get(w.id, "euler.z")
 			local back = cur + angle_delta(cur / DEG, self.base_rot) * DEG
@@ -220,6 +387,7 @@ local function replenish_all(self, data)
 			go.animate(w.id, "position", go.PLAYBACK_ONCE_FORWARD, w.base_offset, go.EASING_OUTBACK, 0.3, delay)
 			go.animate(w.id, "euler.z", go.PLAYBACK_ONCE_FORWARD, back, go.EASING_OUTQUAD, 0.25, delay)
 			w.busy_until = self.time + delay + 0.32
+			w.weapon_busy_until = 0
 			w.rot = nil
 		end
 	end
@@ -259,7 +427,7 @@ local function update_combat_visuals(self, data)
 	end
 end
 
--- Melee: front ranks lunge with a squash & stretch. Archers: a short recoil.
+-- Weapons: melee slashes/chops, archers draw & shoot recoil. Front ranks lunge/recoil.
 local function play_attack(self, target_pos)
 	local my_pos = go.get_position()
 	local dx, dy = target_pos.x - my_pos.x, target_pos.y - my_pos.y
@@ -271,24 +439,45 @@ local function play_attack(self, target_pos)
 	local stretch = vmath.vector3(ws.x * 0.82, ws.y * 1.28, 1)
 
 	local n = 0
+	local weapon_count = 0
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
-		if w.alive and self.time >= w.busy_until and math.random() < (archer and 0.35 or 0.6) then
-			n = n + 1
-			local p = go.get_position(w.id)
-			local lunge = archer and -2.5 or (5 + math.random() * 5)
-			local to = vmath.vector3(p.x + dx * lunge, p.y + dy * lunge, p.z)
-			local delay = (i % 4) * 0.03
-			local dur = archer and 0.1 or 0.16
-			go.animate(w.id, "position", go.PLAYBACK_ONCE_PINGPONG, to, go.EASING_OUTQUAD, dur, delay)
-			go.animate(w.id, "scale", go.PLAYBACK_ONCE_PINGPONG, archer and vmath.vector3(ws.x * 1.15, ws.y * 0.85, 1) or stretch, go.EASING_OUTQUAD, dur, delay)
-			w.busy_until = self.time + delay + dur * 2 + 0.01
-			if n >= MAX_LURCHERS then break end
+		if w.alive then
+			-- Weapon attack animations (melee sword swings or archer bow shooting)
+			if w.weapon_id and go.exists(w.weapon_id) and self.time >= (w.weapon_busy_until or 0) then
+				local chance = archer and 0.55 or 0.75
+				if math.random() < chance then
+					weapon_count = weapon_count + 1
+					local s_delay = (weapon_count % 4) * 0.025 + math.random() * 0.02
+					if w.weapon_type == "sword" then
+						local swing_type = (weapon_count % 3) + 1
+						play_sword_swing(w, s_delay, swing_type)
+						w.weapon_busy_until = self.time + s_delay + 0.28
+					else
+						play_bow_shoot(w, s_delay)
+						w.weapon_busy_until = self.time + s_delay + 0.30
+					end
+				end
+			end
+
+			-- Body lunges / recoil
+			if self.time >= w.busy_until and math.random() < (archer and 0.35 or 0.6) then
+				n = n + 1
+				local p = go.get_position(w.id)
+				local lunge = archer and -2.5 or (5 + math.random() * 5)
+				local to = vmath.vector3(p.x + dx * lunge, p.y + dy * lunge, p.z)
+				local delay = (i % 4) * 0.03
+				local dur = archer and 0.1 or 0.16
+				go.animate(w.id, "position", go.PLAYBACK_ONCE_PINGPONG, to, go.EASING_OUTQUAD, dur, delay)
+				go.animate(w.id, "scale", go.PLAYBACK_ONCE_PINGPONG, archer and vmath.vector3(ws.x * 1.15, ws.y * 0.85, 1) or stretch, go.EASING_OUTQUAD, dur, delay)
+				w.busy_until = self.time + delay + dur * 2 + 0.01
+			end
+			if n >= MAX_LURCHERS and weapon_count >= MAX_LURCHERS + 4 then break end
 		end
 	end
 end
 
--- Winners jump for joy
+-- Winners jump for joy and wave weapons
 local function cheer(self)
 	for i = 1, #self.warriors do
 		local w = self.warriors[i]
@@ -298,6 +487,23 @@ local function cheer(self)
 			go.cancel_animations(w.id, "position")
 			go.animate(w.id, "position.y", go.PLAYBACK_ONCE_PINGPONG, p.y + 6 + math.random() * 4, go.EASING_OUTQUAD, 0.22, delay)
 			go.animate(w.id, "scale", go.PLAYBACK_ONCE_PINGPONG, vmath.vector3(self.warrior_scale.x * 0.85, self.warrior_scale.y * 1.2, 1), go.EASING_OUTQUAD, 0.22, delay)
+			if w.weapon_id and go.exists(w.weapon_id) then
+				go.cancel_animations(w.weapon_id, "position")
+				go.cancel_animations(w.weapon_id, "euler.z")
+				if w.weapon_type == "sword" then
+					-- Wave sword high in triumph!
+					go.set_position(vmath.vector3(8.5, 4.0, 0.02), w.weapon_id)
+					go.set(w.weapon_id, "euler.z", 35)
+					go.animate(w.weapon_id, "euler.z", go.PLAYBACK_LOOP_PINGPONG, -30, go.EASING_INOUTSINE, 0.22, delay)
+					go.animate(w.weapon_id, "position.y", go.PLAYBACK_LOOP_PINGPONG, 7.0, go.EASING_INOUTSINE, 0.22, delay)
+				else
+					-- Wave bow high in triumph!
+					go.set_position(vmath.vector3(0, 10.0, 0.02), w.weapon_id)
+					go.set(w.weapon_id, "euler.z", 0)
+					go.animate(w.weapon_id, "position.y", go.PLAYBACK_LOOP_PINGPONG, 13.5, go.EASING_INOUTSINE, 0.22, delay)
+					go.animate(w.weapon_id, "euler.z", go.PLAYBACK_LOOP_PINGPONG, 25, go.EASING_INOUTSINE, 0.22, delay)
+				end
+			end
 			w.busy_until = self.time + delay + 0.46
 		end
 	end
@@ -361,7 +567,12 @@ function update(self, dt)
 		if self.flash_timer <= 0 then
 			for i = 1, #self.warriors do
 				local w = self.warriors[i]
-				if w.alive then go.set(w.url, "tint", self.base_tint) end
+				if w.alive then
+					go.set(w.url, "tint", self.base_tint)
+					if w.weapon_url and go.exists(w.weapon_id) then
+						go.set(w.weapon_url, "tint", WHITE)
+					end
+				end
 			end
 		end
 	end

@@ -17,6 +17,7 @@ const DEBUG_PORT = 9333;
 const BROWSER = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/EdgeCore/156.0.4314.58/msedge.exe',
 ].find(p => fs.existsSync(p));
 
 fs.mkdirSync(OUT, { recursive: true });
@@ -54,7 +55,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(patchedIndex());
   }
-  const file = path.join(BUNDLE, url);
+  const file = path.join(path.resolve(BUNDLE), url.replace(/^\/+/, ''));
   if (!file.startsWith(path.resolve(BUNDLE)) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404); return res.end();
   }

@@ -171,42 +171,54 @@ const PALE = [[1, 1, 1], [0.78, 0.80, 0.86]];
 // ============ UNITS (white, tinted at runtime; face looks "up" = forward) ============
 // 64 px sprites shown at 0.5 scale. Weapons point forward so turning to the enemy reads clearly.
 {
-  // Melee: round brawler, helmet crest, sword raised forward-right
+  // Melee: round brawler, helmet crest (sword is detached as unit_sword)
   const c = canvas(64, 64);
   const s = { fill: c.fill.bind(c) };
-  const body = circle(31, 37, 19);
-  const crest = capsule(31, 9, 31, 19, 5);
-  // broad blade pointing forward-right, crossguard perpendicular to it
-  const blade = poly([[44.3, 31.7], [50.7, 34.3], [59, 4.5]], 1.2);
-  const guard = capsule(39.5, 32.4, 52.5, 37.6, 2.8);
-  const all = union(body, crest, blade, guard);
+  const body = circle(32, 36, 19);
+  const crest = capsule(32, 9, 32, 19, 5);
+  const all = union(body, crest);
   s.fill(grow(all, 3.4), INK);
-  s.fill(blade, [0.95, 0.95, 0.95, 1]);
-  s.fill(guard, [0.7, 0.7, 0.7, 1]);
   s.fill(crest, [0.82, 0.82, 0.82, 1]);
   s.fill(body, (x, y) => {
     // radial-ish shading: light from top-left
-    const d = len(x - 24, y - 28) / 30;
+    const d = len(x - 24, y - 27) / 30;
     const v = Math.max(0.68, 1.04 - d * 0.42);
     return [v, v, v, 1];
   });
-  s.fill(ellipse(23, 26, 6.5, 4), [1, 1, 1, 0.6]);
-  s.fill(circle(24, 35, 3.8), INK);
-  s.fill(circle(38, 35, 3.8), INK);
-  s.fill(circle(25.2, 33.8, 1.3), [1, 1, 1, 1]);
-  s.fill(circle(39.2, 33.8, 1.3), [1, 1, 1, 1]);
+  s.fill(ellipse(24, 25, 6.5, 4), [1, 1, 1, 0.6]);
+  s.fill(circle(25, 35, 3.8), INK);
+  s.fill(circle(39, 35, 3.8), INK);
+  s.fill(circle(26.2, 33.8, 1.3), [1, 1, 1, 1]);
+  s.fill(circle(40.2, 33.8, 1.3), [1, 1, 1, 1]);
   c.save('unit_melee');
 }
 {
-  // Archer: pointed hood (triangle silhouette) holding a bow in front
+  // Sword for melee warriors: grip centered at (32, 32), blade points UP
+  const c = canvas(64, 64);
+  const s = { fill: c.fill.bind(c) };
+  // Grip is at (32, 32), guard at y=25, blade extends from y=24 to y=6 (tip at (32, 5))
+  const blade = poly([[28, 25], [36, 25], [36, 12], [32, 5], [28, 12]], 1.0);
+  const guard = capsule(22, 26, 42, 26, 2.6);
+  const grip = capsule(32, 27, 32, 37, 2.0);
+  const pommel = circle(32, 40, 3.2);
+  const all = union(blade, guard, grip, pommel);
+  s.fill(grow(all, 2.8), INK);
+  // Blade: shiny steel gradient, highlight on the left edge
+  s.fill(blade, grad(STEEL[0], STEEL[1], 5, 26));
+  s.fill(poly([[29, 24], [32, 24], [32, 6], [29, 12]], 0.5), [1, 1, 1, 0.65]);
+  // Guard & pommel: gold
+  s.fill(guard, grad(GOLDC[0], GOLDC[1], 23, 29));
+  s.fill(pommel, grad(GOLDC[0], GOLDC[1], 37, 43));
+  // Grip: leather brown
+  s.fill(grip, grad(WOOD[0], WOOD[1], 27, 37));
+  c.save('unit_sword');
+}
+{
+  // Archer: pointed hood (triangle silhouette)
   const c = canvas(64, 64);
   const s = { fill: c.fill.bind(c) };
   const hood = poly([[32, 16], [55, 57], [9, 57]], 6);
-  // bow arc held out in front of the hood, string across
-  const arc = inter(ring(32, 26, 19, 4.6), (x, y) => y - 13);
-  s.fill(grow(union(hood, arc), 3.4), INK);
-  s.fill(arc, [0.85, 0.85, 0.85, 1]);
-  s.fill(capsule(16, 13, 48, 13, 0.9), [0.95, 0.95, 0.95, 1]);
+  s.fill(grow(hood, 3.4), INK);
   s.fill(hood, (x, y) => {
     const d = len(x - 25, y - 32) / 30;
     const v = Math.max(0.66, 1.04 - d * 0.45);
@@ -218,6 +230,25 @@ const PALE = [[1, 1, 1], [0.78, 0.80, 0.86]];
   s.fill(circle(26.1, 42.9, 1.25), [1, 1, 1, 1]);
   s.fill(circle(40.1, 42.9, 1.25), [1, 1, 1, 1]);
   c.save('unit_archer');
+}
+{
+  // Bow for archers: centered at (32, 32), arc curves forward
+  const c = canvas(64, 64);
+  const s = { fill: c.fill.bind(c) };
+  const arc = inter(ring(32, 51, 24, 4.4), (x, y) => y - 37);
+  const grip = capsule(32, 25, 32, 30, 3.0);
+  const nockL = circle(12.5, 37, 2.5);
+  const nockR = circle(51.5, 37, 2.5);
+  const wood = union(arc, grip, nockL, nockR);
+  const string = capsule(12.5, 37, 51.5, 37, 1.1);
+  s.fill(grow(wood, 2.8), INK);
+  s.fill(arc, grad(WOOD[0], WOOD[1], 25, 37));
+  s.fill(grip, grad(GOLDC[0], GOLDC[1], 24, 31));
+  s.fill(nockL, grad(GOLDC[0], GOLDC[1], 35, 39));
+  s.fill(nockR, grad(GOLDC[0], GOLDC[1], 35, 39));
+  s.fill(grow(string, 1.5), INK);
+  s.fill(string, [0.96, 0.97, 1.0, 1]);
+  c.save('unit_bow');
 }
 
 // ============ SQUAD ============

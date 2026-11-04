@@ -1,6 +1,6 @@
 {
   "project_git" : {
-    "sha1" : "66905cd7ab6b2d1695b3b48d4fbbbef15dcbb845",
+    "sha1" : "4293b56ca9a956700e9b37bf2fd427b4f90e9e9c",
     "origin" : "https://github.com/a-gellert/Merge.git",
     "branch" : "main"
   },
@@ -12,8 +12,8 @@
   "defold_sdk" : "a81dbb0478e8b73931dc2d671563204f6ac0ef82",
   "dependencies" : [ {
     "url" : "https://github.com/defold/extension-poki-sdk/archive/refs/heads/main.zip",
-    "commit-sha1" : "5ade633bbed5159f8180fbae9f2e542f1241e530",
-    "payload-sha1" : "ffb370f8a939b44c2f681026273b7ad0b73b55b6"
+    "commit-sha1" : "3e0c3296e6c4a27b99387d9c54d06626daa94b89",
+    "payload-sha1" : "afb7d4dba5ab581827e0a15961a335acc9f5fc6a"
   }, {
     "url" : "https://github.com/Insality/druid/archive/master.zip",
     "commit-sha1" : "3eeb5c7ab701bd99503cc83ff5aa49cbeffbea24",

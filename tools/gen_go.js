@@ -42,9 +42,17 @@ ${lines(['  x: 48.0', '  y: 32.0', '}', 'color {', `  x: ${color[0]}`, `  y: ${c
 }
 `;
 }
-const W = (f, s) => fs.writeFileSync(f, s);
+const path = require('path');
+const baseDir = fs.existsSync(path.join(__dirname, '../main/entities')) ? path.join(__dirname, '../main/entities') : process.cwd();
+const W = (f, s) => {
+  const p = path.isAbsolute(f) ? f : path.join(baseDir, f);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, s);
+};
 W('melee/melee.go', script('melee', '/main/entities/melee/melee.script') + sprite('sprite', 'unit_melee', [0, 0, 0], [0.5, 0.5]));
+W('sword/sword.go', script('sword', '/main/entities/sword/sword.script') + sprite('sprite', 'unit_sword', [0, 0, 0], [0.5, 0.5]));
 W('archer/archer.go', script('archer', '/main/entities/archer/archer.script') + sprite('sprite', 'unit_archer', [0, 0, 0], [0.5, 0.5]));
+W('bow/bow.go', script('bow', '/main/entities/bow/bow.script') + sprite('sprite', 'unit_bow', [0, 0, 0], [0.5, 0.5]));
 W('projectile/projectile.go', script('projectile', '/main/entities/projectile/projectile.script') + sprite('sprite', 'arrow', [0, 0, 0], [0.55, 0.55]));
 W('visual_effect/visual_effect.go', script('visual_effect', '/main/entities/visual_effect/visual_effect.script') + sprite('sprite', 'fx_spark', [0, 0, 0], [1, 1]));
 W('grid_cell/grid_cell.go', script('grid_cell', '/main/entities/grid_cell/grid_cell.script') + sprite('sprite', 'cell', [0, 0, 0], [0.84, 0.84]));
@@ -52,6 +60,8 @@ W('bunch_controller/bunch_controller.go',
   script('bunch_controller', '/main/entities/bunch_controller/bunch_controller.script') +
   factory('melee_factory', '/main/entities/melee/melee.go') +
   factory('archer_factory', '/main/entities/archer/archer.go') +
+  factory('sword_factory', '/main/entities/sword/sword.go') +
+  factory('bow_factory', '/main/entities/bow/bow.go') +
   sprite('shadow', 'squad_glow', [0, -3, -0.06], [0.95, 0.75]) +
   sprite('base_ring', 'squad_ring', [0, 0, -0.05], [0.92, 0.92]) +
   sprite('buff_ring', 'fx_ring', [0, 0, 0.12], [1.1, 1.1]) +

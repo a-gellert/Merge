@@ -15,6 +15,18 @@ embedded_components {
   ""
 }
 embedded_components {
+  id: "sword_factory"
+  type: "factory"
+  data: "prototype: \"/main/entities/sword/sword.go\"\n"
+  ""
+}
+embedded_components {
+  id: "bow_factory"
+  type: "factory"
+  data: "prototype: \"/main/entities/bow/bow.go\"\n"
+  ""
+}
+embedded_components {
   id: "shadow"
   type: "sprite"
   data: "default_animation: \"squad_glow\"\n"
