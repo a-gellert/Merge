@@ -269,13 +269,50 @@ end
 local function show_new_tier(self, tier)
 	local toast = N("toast")
 	gui.set_enabled(toast, true)
-	gui.set_color(N("toast_badge"), config.get_tier_color(tier))
+	local tier_color = config.get_tier_color(tier)
+	gui.set_color(N("toast_glow"), tier_color)
+	gui.set_color(N("toast_ring"), tier_color)
+	gui.set_color(N("toast_badge"), tier_color)
 	gui.set_text(N("txt_toast_tier"), tostring(tier))
-	gui.set_text(N("txt_toast"), i18n.get("NEW"))
+	gui.set_text(N("txt_toast"), i18n.get("NEW_TIER"))
+
+	local skin_tier = math.max(1, math.min(16, tier))
+	gui.play_flipbook(N("toast_sword"), hash("unit_sword_" .. skin_tier))
+
 	spin(N("toast_rays"), 4)
-	pop(toast, 0.2, 1, 0.35)
+
+	-- Pulse glow behind the sword
+	gui.cancel_animations(N("toast_glow"), gui.PROP_SCALE)
+	gui.set_scale(N("toast_glow"), vmath.vector3(0.65, 0.65, 1))
+	gui.animate(N("toast_glow"), gui.PROP_SCALE, vmath.vector3(1.18, 1.18, 1), gui.EASING_INOUTSINE, 0.5, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+
+	-- Sword juice pop & dynamic float
+	gui.cancel_animations(N("toast_sword"), gui.PROP_SCALE)
+	gui.cancel_animations(N("toast_sword"), "euler.z")
+	gui.set_scale(N("toast_sword"), vmath.vector3(0.01, 0.01, 1))
+	gui.set_rotation(N("toast_sword"), vmath.vector3(0, 0, -20))
+	gui.animate(N("toast_sword"), gui.PROP_SCALE, vmath.vector3(1.22, 1.22, 1), gui.EASING_OUTBACK, 0.32, 0, function()
+		gui.animate(N("toast_sword"), gui.PROP_SCALE, vmath.vector3(1.0, 1.0, 1), gui.EASING_OUTSINE, 0.18)
+		gui.animate(N("toast_sword"), "euler.z", 15, gui.EASING_INOUTSINE, 0.5, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+	end)
+
+	-- Sparkles burst FX
+	local sparks = { N("toast_spark_1"), N("toast_spark_2"), N("toast_spark_3"), N("toast_spark_4") }
+	for i = 1, #sparks do
+		local s = sparks[i]
+		gui.cancel_animations(s, gui.PROP_SCALE)
+		gui.cancel_animations(s, "euler.z")
+		gui.set_scale(s, vmath.vector3(0.01, 0.01, 1))
+		gui.set_rotation(s, vmath.vector3(0, 0, i * 45))
+		gui.animate(s, gui.PROP_SCALE, vmath.vector3(1.25, 1.25, 1), gui.EASING_OUTBACK, 0.28, (i - 1) * 0.04, function()
+			gui.animate(s, gui.PROP_SCALE, vmath.vector3(0.75, 0.75, 1), gui.EASING_INOUTSINE, 0.35, 0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+		end)
+		gui.animate(s, "euler.z", 360, gui.EASING_LINEAR, 1.6, 0, nil, gui.PLAYBACK_LOOP_FORWARD)
+	end
+
+	pop(toast, 0.25, 1, 0.35)
 	if self.toast_timer then timer.cancel(self.toast_timer) end
-	self.toast_timer = timer.delay(1.5, false, function()
+	self.toast_timer = timer.delay(2.2, false, function()
 		self.toast_timer = nil
 		gui.animate(toast, gui.PROP_SCALE, vmath.vector3(0.01, 0.01, 1), gui.EASING_INBACK, 0.2, 0, function()
 			gui.set_enabled(toast, false)

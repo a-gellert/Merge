@@ -139,10 +139,11 @@ end
 
 EFFECTS.new_tier = function(pos, extra)
 	local tint = config.get_tier_color(extra and extra.tier or 2)
-	ring(pos, vmath.vector4(1, 1, 1, 1), 0.3, 2.6, 0.5)
-	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.2, 2.0, 0.55, 0.08)
-	sparks(pos, 22, GOLD, WHITE, 35, 95, 1.1, 0.6)
-	shake(0.008, 0.2)
+	ring(pos, vmath.vector4(1, 1, 1, 1), 0.35, 2.8, 0.55)
+	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.25, 2.2, 0.6, 0.08)
+	sparks(pos, 28, GOLD, WHITE, 40, 110, 1.25, 0.7)
+	sparks(pos, 16, tint, GOLD, 25, 80, 0.95, 0.5)
+	shake(0.012, 0.24)
 end
 
 EFFECTS.lucky = function(pos)

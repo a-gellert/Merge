@@ -140,6 +140,21 @@ function M.get_chapter_tint(chapter)
 	return M.CHAPTER_TINTS[((chapter - 1) % n) + 1]
 end
 
+M.WEAPON_SKIN_COUNT = 16
+
+function M.get_weapon_skin(unit_type, tier)
+	local t = math.max(1, math.min(M.WEAPON_SKIN_COUNT, tier or 1))
+	if unit_type == M.UNIT_ARCHER then
+		return "unit_bow_" .. t
+	else
+		return "unit_sword_" .. t
+	end
+end
+
+function M.get_weapon_icon(unit_type, tier)
+	return M.get_weapon_skin(unit_type, tier)
+end
+
 function M.get_unit_count(tier)
 	local idx = math.max(1, math.min(tier, #M.UNIT_COUNTS))
 	return M.UNIT_COUNTS[idx]

@@ -126,10 +126,17 @@ box('banner_icon', 'banner', -58, 0, 42, 42, 'icon_skull', C('#ff5a4f'));
 text('txt_banner', 'banner', 14, 0, 'BOSS', 0.75, C('#ffd9d4'), { w: 240 });
 
 pane('toast', null, 150, 400, { disabled: true });
-box('toast_rays', 'toast', 0, 0, 220, 220, 'rays', C('#ffe08a', 0.8));
-box('toast_badge', 'toast', 0, 6, 74, 74, 'tier_badge', WHITE);
-text('txt_toast_tier', 'toast_badge', 0, 0, '5', 0.8, INK, { outline: [1, 1, 1] });
-text('txt_toast', 'toast', 0, -50, 'NEW!', 0.6, GOLD);
+box('toast_rays', 'toast', 0, 15, 240, 240, 'rays', C('#ffe08a', 0.85));
+box('toast_glow', 'toast', 0, 15, 180, 180, 'squad_glow', GOLD);
+box('toast_ring', 'toast', 0, 15, 100, 100, 'squad_ring', WHITE);
+box('toast_sword', 'toast', 0, 15, 88, 88, 'unit_sword_1', WHITE);
+box('toast_badge', 'toast', 34, -14, 44, 44, 'tier_badge', WHITE);
+text('txt_toast_tier', 'toast_badge', 0, 0, '5', 0.58, INK, { outline: [1, 1, 1] });
+text('txt_toast', 'toast', 0, -58, 'NEW TIER!', 0.62, GOLD);
+box('toast_spark_1', 'toast', -44, 44, 22, 22, 'fx_spark', GOLD);
+box('toast_spark_2', 'toast', 44, 48, 18, 18, 'fx_spark', WHITE);
+box('toast_spark_3', 'toast', -38, -20, 16, 16, 'fx_spark', GOLD);
+box('toast_spark_4', 'toast', 40, -18, 20, 20, 'fx_spark', WHITE);
 
 // ---------------- FLYING COIN TEMPLATE ----------------
 box('coin_fly', null, -100, -100, 18, 18, 'coin', WHITE, { disabled: true });

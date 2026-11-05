@@ -193,6 +193,7 @@ local function setup_visuals(self, data)
 			go.set_position(SWORD_REST_POS, weapon_id)
 			go.set_rotation(sword_rest_q, weapon_id)
 			weapon_url = sprite_url(weapon_id)
+			sprite.play_flipbook(weapon_url, config.get_weapon_skin(config.UNIT_MELEE, self.tier))
 		else
 			weapon_type = "bow"
 			weapon_id = factory.create("#bow_factory")
@@ -200,6 +201,7 @@ local function setup_visuals(self, data)
 			go.set_position(BOW_REST_POS, weapon_id)
 			go.set_rotation(bow_rest_q, weapon_id)
 			weapon_url = sprite_url(weapon_id)
+			sprite.play_flipbook(weapon_url, config.get_weapon_skin(config.UNIT_ARCHER, self.tier))
 		end
 		local w = {
 			id = w_id,

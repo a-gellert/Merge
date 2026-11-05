@@ -1492,11 +1492,11 @@ nodes {
 nodes {
   position {
     x: 0
-    y: 0
+    y: 15
   }
   size {
-    x: 220
-    y: 220
+    x: 240
+    y: 240
   }
   color {
     x: 1
@@ -1508,16 +1508,76 @@ nodes {
   id: "toast_rays"
   parent: "toast"
   inherit_alpha: true
-  alpha: 0.8
+  alpha: 0.85
 }
 nodes {
   position {
     x: 0
-    y: 6
+    y: 15
   }
   size {
-    x: 74
-    y: 74
+    x: 180
+    y: 180
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
+  }
+  type: TYPE_BOX
+  texture: "game/squad_glow"
+  id: "toast_glow"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 0
+    y: 15
+  }
+  size {
+    x: 100
+    y: 100
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/squad_ring"
+  id: "toast_ring"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 0
+    y: 15
+  }
+  size {
+    x: 88
+    y: 88
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/unit_sword_1"
+  id: "toast_sword"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 34
+    y: -14
+  }
+  size {
+    x: 44
+    y: 44
   }
   color {
     x: 1
@@ -1536,8 +1596,8 @@ nodes {
     y: 0
   }
   scale {
-    x: 0.8
-    y: 0.8
+    x: 0.58
+    y: 0.58
     z: 1
   }
   size {
@@ -1566,11 +1626,11 @@ nodes {
 nodes {
   position {
     x: 0
-    y: -50
+    y: -58
   }
   scale {
-    x: 0.6
-    y: 0.6
+    x: 0.62
+    y: 0.62
     z: 1
   }
   size {
@@ -1583,7 +1643,7 @@ nodes {
     z: 0.227
   }
   type: TYPE_TEXT
-  text: "NEW!"
+  text: "NEW TIER!"
   font: "druid_text_bold"
   id: "txt_toast"
   outline {
@@ -1595,6 +1655,86 @@ nodes {
   inherit_alpha: true
   outline_alpha: 1.0
   shadow_alpha: 0.0
+}
+nodes {
+  position {
+    x: -44
+    y: 44
+  }
+  size {
+    x: 22
+    y: 22
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
+  }
+  type: TYPE_BOX
+  texture: "game/fx_spark"
+  id: "toast_spark_1"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 44
+    y: 48
+  }
+  size {
+    x: 18
+    y: 18
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/fx_spark"
+  id: "toast_spark_2"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -38
+    y: -20
+  }
+  size {
+    x: 16
+    y: 16
+  }
+  color {
+    x: 1
+    y: 0.812
+    z: 0.227
+  }
+  type: TYPE_BOX
+  texture: "game/fx_spark"
+  id: "toast_spark_3"
+  parent: "toast"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 40
+    y: -18
+  }
+  size {
+    x: 20
+    y: 20
+  }
+  color {
+    x: 1
+    y: 1
+    z: 1
+  }
+  type: TYPE_BOX
+  texture: "game/fx_spark"
+  id: "toast_spark_4"
+  parent: "toast"
+  inherit_alpha: true
 }
 nodes {
   position {

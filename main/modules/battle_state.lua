@@ -185,7 +185,7 @@ local function clear_buffs(sq)
 end
 
 local function track_tier(tier, pos)
-	if economy.register_tier(tier) and tier >= 3 then
+	if economy.register_tier(tier) and (tier >= 3 or (tier >= 2 and tutorial.is_completed())) then
 		view("play_effect", "new_tier", pos, { tier = tier })
 		for i = 1, #new_tier_callbacks do
 			new_tier_callbacks[i](tier)
