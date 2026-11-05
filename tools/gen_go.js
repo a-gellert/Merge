@@ -50,9 +50,9 @@ const W = (f, s) => {
   fs.writeFileSync(p, s);
 };
 W('melee/melee.go', script('melee', '/main/entities/melee/melee.script') + sprite('sprite', 'unit_melee', [0, 0, 0], [0.5, 0.5]));
-W('sword/sword.go', script('sword', '/main/entities/sword/sword.script') + sprite('sprite', 'unit_sword', [0, 0, 0], [0.25, 0.25]));
+W('sword/sword.go', script('sword', '/main/entities/sword/sword.script') + sprite('sprite', 'unit_sword', [0, 0, 0], [0.3125, 0.3125]));
 W('archer/archer.go', script('archer', '/main/entities/archer/archer.script') + sprite('sprite', 'unit_archer', [0, 0, 0], [0.5, 0.5]));
-W('bow/bow.go', script('bow', '/main/entities/bow/bow.script') + sprite('sprite', 'unit_bow', [0, 0, 0], [0.25, 0.25]));
+W('bow/bow.go', script('bow', '/main/entities/bow/bow.script') + sprite('sprite', 'unit_bow', [0, 0, 0], [0.3125, 0.3125]));
 W('projectile/projectile.go', script('projectile', '/main/entities/projectile/projectile.script') + sprite('sprite', 'arrow', [0, 0, 0], [0.55, 0.55]));
 W('visual_effect/visual_effect.go', script('visual_effect', '/main/entities/visual_effect/visual_effect.script') + sprite('sprite', 'fx_spark', [0, 0, 0], [1, 1]));
 W('grid_cell/grid_cell.go', script('grid_cell', '/main/entities/grid_cell/grid_cell.script') + sprite('sprite', 'cell', [0, 0, 0], [0.84, 0.84]));
