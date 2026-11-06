@@ -107,6 +107,10 @@ images {
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {
+  image: "/main/assets/game/icon_talent.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
   image: "/main/assets/game/panel.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
@@ -124,6 +128,22 @@ images {
 }
 images {
   image: "/main/assets/game/square.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/main/assets/game/talent_archer.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/main/assets/game/talent_gold.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/main/assets/game/talent_melee.png"
+  sprite_trim_mode: SPRITE_TRIM_MODE_OFF
+}
+images {
+  image: "/main/assets/game/talent_start.png"
   sprite_trim_mode: SPRITE_TRIM_MODE_OFF
 }
 images {

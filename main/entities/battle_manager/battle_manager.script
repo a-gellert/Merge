@@ -3,15 +3,17 @@ local config = require("main.modules.config")
 local grid = require("main.modules.grid")
 local levels = require("main.modules.levels")
 local battle_state = require("main.modules.battle_state")
+local sound = require("main.modules.sound")
 
 local camera = nil
 pcall(function() camera = require("orthographic.camera") end)
 local CAMERA_ID = hash("/camera")
 
-local FX_POOL_SIZE = 220
-local MAX_SLASH_PER_FRAME = 5
-local MAX_COINS_PER_FRAME = 3
-local MAX_ARROW_FX_PER_FRAME = 6
+local FX_POOL_SIZE = 280
+local MAX_SLASH_PER_FRAME = 6
+local MAX_COINS_PER_FRAME = 4
+local MAX_ARROW_FX_PER_FRAME = 8
+local MAX_HIT_FX_PER_FRAME = 12
 local MAX_DUST_PER_FRAME = 4
 local DUST_STEP2 = 14 * 14 -- a dust puff every 14 px of marching
 
@@ -20,7 +22,7 @@ local fx_pool = {}
 local fx_cursor = 1
 local now = 0
 local now_shake = 0
-local frame_budget = { slash = 0, coin = 0, arrow = 0, dust = 0 }
+local frame_budget = { slash = 0, coin = 0, arrow = 0, dust = 0, hit = 0 }
 
 local GOLD = vmath.vector4(1.0, 0.84, 0.25, 1)
 local WHITE = vmath.vector4(1, 1, 1, 1)
@@ -103,6 +105,119 @@ local function sparks(pos, n, tint_a, tint_b, dmin, dmax, scale, dur)
 	end
 end
 
+-- Multi-color hit spark palettes for vivid combat feedback
+local FIRE_PALETTE = {
+	vmath.vector4(1.0, 0.50, 0.08, 1), -- Flame orange
+	vmath.vector4(1.0, 0.85, 0.18, 1), -- Sun yellow
+	vmath.vector4(1.0, 0.18, 0.25, 1), -- Ember red
+	vmath.vector4(1.0, 0.98, 0.80, 1), -- White hot
+}
+
+local RAGE_PALETTE = {
+	vmath.vector4(1.0, 0.20, 0.45, 1), -- Electric crimson
+	vmath.vector4(1.0, 0.82, 0.20, 1), -- Shock gold
+	vmath.vector4(0.85, 0.25, 1.0, 1), -- Arcane violet
+	vmath.vector4(1.0, 1.0, 1.0, 1),   -- Pure white
+}
+
+local BOSS_PALETTE = {
+	vmath.vector4(0.75, 0.15, 1.0, 1), -- Void purple
+	vmath.vector4(1.0, 0.20, 0.30, 1), -- Blood ruby
+	vmath.vector4(1.0, 0.75, 0.15, 1), -- Corrupt gold
+	vmath.vector4(0.95, 0.95, 1.0, 1), -- White core
+}
+
+local PLAYER_ARROW_PALETTE = {
+	vmath.vector4(0.20, 0.85, 1.0, 1), -- Azure
+	vmath.vector4(0.25, 1.0, 0.70, 1), -- Mint
+	vmath.vector4(1.0, 0.88, 0.30, 1), -- Gold
+	vmath.vector4(1.0, 1.0, 1.0, 1),   -- White
+}
+
+local ENEMY_ARROW_PALETTE = {
+	vmath.vector4(1.0, 0.30, 0.32, 1), -- Candy red
+	vmath.vector4(1.0, 0.65, 0.18, 1), -- Sunset orange
+	vmath.vector4(1.0, 0.85, 0.30, 1), -- Gold
+	vmath.vector4(1.0, 1.0, 1.0, 1),   -- White
+}
+
+local SHIELD_PALETTE = {
+	vmath.vector4(0.20, 0.85, 1.0, 1), -- Electric cyan
+	vmath.vector4(0.55, 0.95, 1.0, 1), -- Ice blue
+	vmath.vector4(0.10, 0.65, 1.0, 1), -- Deep azure
+	vmath.vector4(1.0, 1.0, 1.0, 1),   -- Pure white
+}
+
+-- 12 distinct multi-color hit palettes for all tiers (cycles for higher tiers)
+local TIER_HIT_PALETTES = {
+	-- T1: Silver steel & friction gold
+	{ vmath.vector4(0.95, 0.98, 1.0, 1), vmath.vector4(0.70, 0.85, 1.0, 1), vmath.vector4(1.0, 0.85, 0.35, 1), vmath.vector4(0.8, 0.9, 1.0, 1) },
+	-- T2: Vibrant lime & emerald
+	{ vmath.vector4(0.40, 1.0, 0.35, 1), vmath.vector4(0.20, 0.85, 0.50, 1), vmath.vector4(0.85, 1.0, 0.25, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T3: Electric azure & cyan
+	{ vmath.vector4(0.25, 0.80, 1.0, 1), vmath.vector4(0.10, 0.98, 0.95, 1), vmath.vector4(0.50, 0.40, 1.0, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T4: Royal purple & fuchsia
+	{ vmath.vector4(0.75, 0.35, 1.0, 1), vmath.vector4(0.95, 0.25, 0.80, 1), vmath.vector4(0.45, 0.70, 1.0, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T5: Radiant gold & sunlight
+	{ vmath.vector4(1.0, 0.85, 0.15, 1), vmath.vector4(1.0, 0.60, 0.10, 1), vmath.vector4(1.0, 0.98, 0.55, 1), vmath.vector4(1, 1, 0.9, 1) },
+	-- T6: Blazing flame & embers
+	{ vmath.vector4(1.0, 0.45, 0.10, 1), vmath.vector4(1.0, 0.85, 0.20, 1), vmath.vector4(1.0, 0.15, 0.25, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T7: Deep ruby & rose
+	{ vmath.vector4(1.0, 0.18, 0.40, 1), vmath.vector4(1.0, 0.45, 0.65, 1), vmath.vector4(1.0, 0.85, 0.30, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T8: High-energy cyan & turquoise
+	{ vmath.vector4(0.10, 0.98, 0.92, 1), vmath.vector4(0.20, 0.70, 1.0, 1), vmath.vector4(0.40, 1.0, 0.65, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T9: Neon pink & magenta
+	{ vmath.vector4(1.0, 0.40, 0.85, 1), vmath.vector4(1.0, 0.20, 0.55, 1), vmath.vector4(0.40, 0.85, 1.0, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T10: Acid lime & cyber yellow
+	{ vmath.vector4(0.65, 1.0, 0.20, 1), vmath.vector4(0.95, 0.98, 0.15, 1), vmath.vector4(0.20, 1.0, 0.80, 1), vmath.vector4(1, 1, 1, 1) },
+	-- T11: Prismatic diamond & violet
+	{ vmath.vector4(0.95, 0.98, 1.0, 1), vmath.vector4(0.60, 0.85, 1.0, 1), vmath.vector4(0.90, 0.60, 1.0, 1), vmath.vector4(1.0, 0.90, 0.40, 1) },
+	-- T12: Legendary sun & solar crimson
+	{ vmath.vector4(1.0, 0.70, 0.20, 1), vmath.vector4(1.0, 0.90, 0.35, 1), vmath.vector4(1.0, 0.30, 0.15, 1), vmath.vector4(1, 1, 1, 1) },
+}
+
+local function get_hit_palette(tier, is_player, is_fire, is_rage, is_boss)
+	if is_boss then return BOSS_PALETTE end
+	if is_fire then return FIRE_PALETTE end
+	if is_rage then return RAGE_PALETTE end
+	local idx = (((tier or 1) - 1) % #TIER_HIT_PALETTES) + 1
+	return TIER_HIT_PALETTES[idx]
+end
+
+-- Multi-colored directional or radial needle sparks
+local function hit_sparks(pos, n, palette, dir_angle, spread, dmin, dmax, scale, dur)
+	if not palette or #palette == 0 then return end
+	spread = spread or (math.pi * 2)
+	scale = scale or 0.8
+	dur = dur or 0.15
+	local n_colors = #palette
+
+	for i = 1, n do
+		local a
+		if dir_angle then
+			a = dir_angle + (math.random() - 0.5) * spread
+		else
+			a = (i / n) * math.pi * 2 + (math.random() - 0.5) * 0.6
+		end
+		local d = dmin + math.random() * (dmax - dmin)
+		local tint = palette[((i - 1) % n_colors) + 1]
+		local s0 = scale * (0.85 + math.random() * 0.5)
+
+		fx(pos, {
+			anim = "fx_spark",
+			tint = tint,
+			rot = a,
+			s0 = s0 * 1.35,
+			sy0 = s0 * 0.40,
+			s1 = 0.05,
+			sy1 = 0.05,
+			dur = dur * (0.85 + math.random() * 0.35),
+			to = vmath.vector3(pos.x + math.cos(a) * d, pos.y + math.sin(a) * d, 0),
+			z = 0.72,
+		})
+	end
+end
+
 local function ring(pos, tint, s0, s1, dur, delay)
 	fx(pos, { anim = "fx_ring", tint = tint, s0 = s0, s1 = s1, dur = dur, delay = delay, z = 0.55 })
 end
@@ -112,6 +227,7 @@ local function puff(pos, tint, s0, s1, dur)
 end
 
 local function coin_pop(pos, n)
+	sound.play("coin", 0.55)
 	for _ = 1, n do
 		if frame_budget.coin >= MAX_COINS_PER_FRAME then return end
 		frame_budget.coin = frame_budget.coin + 1
@@ -130,7 +246,9 @@ end
 local EFFECTS = {}
 
 EFFECTS.merge = function(pos, extra)
-	local tint = config.get_tier_color(extra and extra.tier or 2)
+	local tier = extra and extra.tier or 2
+	local tint = config.get_tier_color(tier)
+	sound.play("merge", 0.85, 0.95 + (tier % 12) * 0.04)
 	puff(pos, vmath.vector4(1, 1, 1, 0.9), 0.6, 2.2, 0.22)
 	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.25, 1.7, 0.4)
 	sparks(pos, 14, GOLD, tint, 25, 62, 0.9, 0.38)
@@ -138,6 +256,7 @@ EFFECTS.merge = function(pos, extra)
 end
 
 EFFECTS.new_tier = function(pos, extra)
+	sound.play("new_tier", 0.95)
 	local tint = config.get_tier_color(extra and extra.tier or 2)
 	ring(pos, vmath.vector4(1, 1, 1, 1), 0.35, 2.8, 0.55)
 	ring(pos, vmath.vector4(tint.x, tint.y, tint.z, 1), 0.25, 2.2, 0.6, 0.08)
@@ -147,18 +266,21 @@ EFFECTS.new_tier = function(pos, extra)
 end
 
 EFFECTS.lucky = function(pos)
+	sound.play("coin", 0.75, 1.2)
 	ring(pos, GOLD, 0.3, 1.9, 0.45)
 	sparks(pos, 12, GOLD, WHITE, 25, 60, 1.0, 0.45)
 	coin_pop(pos, 3)
 end
 
 EFFECTS.sell = function(pos)
+	sound.play("coin", 0.75)
 	sparks(pos, 10, GOLD, vmath.vector4(1, 0.95, 0.6, 1), 18, 45, 0.7, 0.3)
 	coin_pop(pos, 3)
 	shake(0.004, 0.08)
 end
 
 EFFECTS.crate_open = function(pos, extra)
+	sound.play("merge", 0.75, 1.2)
 	local tint = (extra and extra.golden) and GOLD or vmath.vector4(0.95, 0.75, 0.45, 1)
 	puff(pos, vmath.vector4(1, 0.95, 0.8, 0.9), 0.5, 2.0, 0.3)
 	sparks(pos, 12, tint, WHITE, 20, 55, 0.9, 0.4)
@@ -166,11 +288,22 @@ EFFECTS.crate_open = function(pos, extra)
 end
 
 EFFECTS.clash = function(pos, extra)
+	sound.play("slash", 0.85)
+	sound.play("hit", 0.8)
 	local tier = extra and extra.tier or 1
-	puff(pos, vmath.vector4(0.85, 0.8, 0.7, 0.7), 0.6, 2.4, 0.4)
-	ring(pos, vmath.vector4(1, 1, 1, 0.9), 0.2, 1.3, 0.25)
-	sparks(pos, 8, vmath.vector4(1, 0.95, 0.7, 1), WHITE, 15, 40, 0.8, 0.25)
-	shake(math.min(0.012, 0.004 + tier * 0.0006), 0.12)
+	puff(pos, vmath.vector4(0.9, 0.85, 0.75, 0.75), 0.6, 2.6, 0.4)
+	ring(pos, WHITE, 0.2, 1.8, 0.28)
+	ring(pos, GOLD, 0.15, 1.4, 0.32, 0.04)
+
+	local clash_palette = {
+		vmath.vector4(0.2, 0.8, 1.0, 1),
+		vmath.vector4(1.0, 0.3, 0.35, 1),
+		GOLD,
+		WHITE,
+		vmath.vector4(1.0, 0.6, 0.15, 1),
+	}
+	hit_sparks(pos, 14, clash_palette, nil, nil, 20, 55, 0.95, 0.30)
+	shake(math.min(0.012, 0.005 + tier * 0.0006), 0.14)
 end
 
 EFFECTS.squad_death = function(pos, extra)
@@ -186,23 +319,164 @@ end
 EFFECTS.arrow_hit = function(pos, extra)
 	if frame_budget.arrow >= MAX_ARROW_FX_PER_FRAME then return end
 	frame_budget.arrow = frame_budget.arrow + 1
+	sound.play("hit", 0.65)
+
 	local fire = extra and extra.fire
-	local tint = fire and vmath.vector4(1, 0.55, 0.1, 0.9) or vmath.vector4(1, 0.95, 0.8, 0.8)
-	puff(pos, tint, 0.2, fire and 0.9 or 0.6, 0.18)
-	if math.random() < 0.4 then
-		sparks(pos, 2, tint, WHITE, 6, 16, 0.4, 0.16)
+	local is_player = (extra and extra.team == config.TEAM_PLAYER)
+	local tier = extra and extra.tier or 1
+
+	local palette
+	if fire then
+		palette = FIRE_PALETTE
+	elseif is_player then
+		palette = PLAYER_ARROW_PALETTE
+	else
+		palette = ENEMY_ARROW_PALETTE
+	end
+
+	local main_tint = palette[1]
+	puff(pos, vmath.vector4(main_tint.x, main_tint.y, main_tint.z, fire and 0.9 or 0.75), 0.22, fire and 1.1 or 0.75, 0.18)
+
+	-- Multi-colored needle sparks in 360-degree burst
+	local n_sparks = fire and 7 or 4
+	hit_sparks(pos, n_sparks, palette, nil, nil, 8, fire and 32 or 22, fire and 0.85 or 0.65, fire and 0.20 or 0.15)
+
+	-- Impact starburst flash
+	fx(pos, {
+		anim = "fx_spark",
+		tint = fire and vmath.vector4(1, 0.95, 0.5, 1) or WHITE,
+		s0 = fire and 0.65 or 0.45,
+		s1 = 0.08,
+		dur = 0.10,
+		z = 0.74,
+	})
+
+	-- Fire shockwave ring
+	if fire then
+		fx(pos, {
+			anim = "fx_ring",
+			tint = vmath.vector4(1.0, 0.55, 0.1, 0.85),
+			s0 = 0.15,
+			s1 = 0.55,
+			dur = 0.16,
+			z = 0.62,
+		})
 	end
 end
 
-EFFECTS.slash = function(from_pos, target_pos)
+EFFECTS.slash = function(from_pos, target_pos, sq, tgt)
 	if frame_budget.slash >= MAX_SLASH_PER_FRAME then return end
 	frame_budget.slash = frame_budget.slash + 1
-	local angle = math.atan2(target_pos.y - from_pos.y, target_pos.x - from_pos.x) - math.pi * 0.5 + (math.random() - 0.5) * 1.2
-	local p = vmath.vector3(target_pos.x + (math.random() - 0.5) * 18, target_pos.y + (math.random() - 0.5) * 18, 0)
-	fx(p, { anim = "fx_slash", tint = vmath.vector4(1, 1, 1, 0.95), rot = angle, s0 = 0.35, s1 = 0.55, sy0 = 0.35, sy1 = 0.2, dur = 0.14, z = 0.65 })
+	sound.play("slash", 0.65)
+
+	local tier = sq and sq.tier or 1
+	local is_player = (not sq) or (sq.team == config.TEAM_PLAYER)
+	local is_fire = sq and sq.has_fire
+	local is_rage = sq and sq.has_rage
+	local is_boss = sq and sq.is_boss
+
+	local boost = battle_state.get_rage_drum_level()
+	if boost > 0.4 then is_rage = true end
+
+	-- Calculate strike vector
+	local dx = target_pos.x - from_pos.x
+	local dy = target_pos.y - from_pos.y
+	local dist = math.sqrt(dx * dx + dy * dy)
+	local attack_angle = (dist > 0.1) and math.atan2(dy, dx) or (math.pi * 0.5)
+
+	-- Multi-slash for larger squads clashing
+	local alive = sq and sq.alive_units or 1
+	local n_slashes = (alive >= 12 and frame_budget.slash < MAX_SLASH_PER_FRAME) and 2 or 1
+
+	local palette = get_hit_palette(tier, is_player, is_fire, is_rage, is_boss)
+	local primary_color = palette[1]
+	local s_base = 0.36 + math.min(0.36, tier * 0.024)
+	if is_boss then s_base = s_base * 1.4 end
+
+	for s_idx = 1, n_slashes do
+		if s_idx > 1 then frame_budget.slash = frame_budget.slash + 1 end
+		local t_contact = 0.70 + (math.random() - 0.5) * 0.16
+		local px = from_pos.x + dx * t_contact + (math.random() - 0.5) * 16
+		local py = from_pos.y + dy * t_contact + (math.random() - 0.5) * 16
+		local hit_pos = vmath.vector3(px, py, 0)
+		local slash_angle = attack_angle - math.pi * 0.5 + (math.random() - 0.5) * 0.9
+
+		-- 1. Outer colored blade wave
+		fx(hit_pos, {
+			anim = "fx_slash",
+			tint = vmath.vector4(primary_color.x, primary_color.y, primary_color.z, 0.95),
+			rot = slash_angle,
+			s0 = s_base,
+			s1 = s_base * 1.35,
+			sy0 = s_base * 0.85,
+			sy1 = s_base * 0.22,
+			dur = 0.13,
+			z = 0.65,
+		})
+
+		-- 2. Inner brilliant core for higher tiers or crits
+		if tier >= 2 or is_boss or is_fire or is_rage then
+			fx(hit_pos, {
+				anim = "fx_slash",
+				tint = WHITE,
+				rot = slash_angle,
+				s0 = s_base * 0.65,
+				s1 = s_base * 0.92,
+				sy0 = s_base * 0.45,
+				sy1 = s_base * 0.12,
+				dur = 0.10,
+				z = 0.66,
+			})
+		end
+
+		-- 3. Directional multi-colored needle sparks spraying outwards
+		local n_sparks = math.min(7, 3 + math.floor(tier * 0.25))
+		hit_sparks(hit_pos, n_sparks, palette, attack_angle, math.pi * 0.65, 14, 34 + tier * 1.2, 0.72 + tier * 0.02, 0.15)
+
+		-- 4. Starburst flash at impact center
+		fx(hit_pos, {
+			anim = "fx_spark",
+			tint = (math.random() < 0.5) and WHITE or palette[2],
+			s0 = 0.42 + math.min(0.28, tier * 0.02),
+			s1 = 0.08,
+			dur = 0.09,
+			z = 0.72,
+		})
+
+		-- 5. Impact micro shockwave on high tiers, buffs, or crits
+		if tier >= 3 or is_boss or is_fire or is_rage or math.random() < 0.35 then
+			fx(hit_pos, {
+				anim = "fx_ring",
+				tint = vmath.vector4(primary_color.x, primary_color.y, primary_color.z, 0.8),
+				s0 = 0.08,
+				s1 = 0.30 + math.min(0.28, tier * 0.022),
+				dur = 0.13,
+				z = 0.60,
+			})
+		end
+	end
+end
+
+EFFECTS.shield_hit = function(pos, extra)
+	if frame_budget.hit >= MAX_HIT_FX_PER_FRAME then return end
+	frame_budget.hit = frame_budget.hit + 1
+	sound.play("hit", 0.75, 1.25)
+	ring(pos, vmath.vector4(0.2, 0.85, 1.0, 0.9), 0.1, 0.65, 0.16)
+	hit_sparks(pos, 6, SHIELD_PALETTE, nil, nil, 10, 30, 0.7, 0.16)
+end
+
+EFFECTS.unit_death_burst = function(pos, sq)
+	if frame_budget.hit >= MAX_HIT_FX_PER_FRAME then return end
+	frame_budget.hit = frame_budget.hit + 1
+	local tier = sq and sq.tier or 1
+	local is_player = (sq and sq.team == config.TEAM_PLAYER)
+	local palette = get_hit_palette(tier, is_player, false, false, sq and sq.is_boss)
+	puff(pos, vmath.vector4(palette[1].x, palette[1].y, palette[1].z, 0.65), 0.25, 0.85, 0.20)
+	hit_sparks(pos, 5, palette, nil, nil, 8, 26, 0.6, 0.16)
 end
 
 EFFECTS.drum_tap = function(pos)
+	sound.play("hit", 0.45, 1.35)
 	ring(pos, vmath.vector4(1, 0.8, 0.3, 0.8), 0.15, 0.9, 0.22)
 	sparks(pos, 4, vmath.vector4(1, 0.6, 0.15, 1), GOLD, 10, 26, 0.5, 0.2)
 end
@@ -231,6 +505,7 @@ local function cheer(list)
 end
 
 EFFECTS.victory_burst = function()
+	sound.play("victory", 0.9)
 	cheer(battle_state.get_player_squads())
 	for i = 1, 6 do
 		local p = vmath.vector3(110 + math.random() * 180, 360 + math.random() * 170, 0)
@@ -240,6 +515,7 @@ EFFECTS.victory_burst = function()
 end
 
 EFFECTS.defeat_burst = function(pos)
+	sound.play("defeat", 0.9)
 	cheer(battle_state.get_enemy_squads())
 	ring(pos, vmath.vector4(1, 0.3, 0.3, 0.8), 0.4, 4.0, 0.6)
 	shake(0.01, 0.25)
@@ -388,11 +664,14 @@ local function make_handlers(self)
 			if item.go_id then msg.post(item.go_id, "snap", { pos = item.home_pos }) end
 		end,
 
-		damage_squad = function(sq, amount, killed)
+		damage_squad = function(sq, amount, killed, hit_x, hit_y)
 			if sq.go_id then msg.post(sq.go_id, "hit") end
-			if killed and killed > 0 and sq.team == config.TEAM_ENEMY then
-				local p = vmath.vector3(sq.current_pos)
-				queue(function() coin_pop(p, 1) end)
+			if killed and killed > 0 then
+				local p = (hit_x and hit_y) and vmath.vector3(hit_x, hit_y, 0) or vmath.vector3(sq.current_pos)
+				if sq.team == config.TEAM_ENEMY then
+					queue(function() coin_pop(p, 1) end)
+				end
+				queue(function() EFFECTS.unit_death_burst(p, sq) end)
 			end
 		end,
 
@@ -400,7 +679,7 @@ local function make_handlers(self)
 			if sq.go_id then msg.post(sq.go_id, "attack", { target_pos = tgt.current_pos }) end
 			if sq.unit_type == config.UNIT_MELEE then
 				local from, to = vmath.vector3(sq.current_pos), vmath.vector3(tgt.current_pos)
-				queue(function() EFFECTS.slash(from, to) end)
+				queue(function() EFFECTS.slash(from, to, sq, tgt) end)
 			end
 		end,
 
@@ -518,7 +797,7 @@ end
 
 function update(self, dt)
 	now = now + dt
-	frame_budget.slash, frame_budget.coin, frame_budget.arrow, frame_budget.dust = 0, 0, 0, 0
+	frame_budget.slash, frame_budget.coin, frame_budget.arrow, frame_budget.dust, frame_budget.hit = 0, 0, 0, 0, 0
 	process_queue()
 	battle_state.update_battle(dt)
 	-- Light continuous rumble while the tap boost is on

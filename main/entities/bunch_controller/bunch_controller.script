@@ -1,6 +1,7 @@
 -- Squad view: spawns warrior sprites in a readable formation and animates the crowd.
 -- No game logic here: battle_state decides, this script only shows.
 local config = require("main.modules.config")
+local sound = require("main.modules.sound")
 
 local WHITE = vmath.vector4(1, 1, 1, 1)
 local SHADOW = vmath.vector4(0, 0, 0, 0.32)
@@ -110,6 +111,7 @@ local function play_bow_shoot(w, delay)
 	go.animate(b_id, "euler.z", go.PLAYBACK_ONCE_FORWARD, aim_tilt, go.EASING_INQUAD, 0.08, delay, function()
 		if not go.exists(b_id) or not w.alive then return end
 		-- 2. Release & forward kick / recoil
+		sound.play("shoot", 0.55)
 		go.animate(b_id, "position.y", go.PLAYBACK_ONCE_FORWARD, 11.0, go.EASING_OUTQUAD, 0.06)
 		go.animate(b_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1.18, 0.88, 1), go.EASING_OUTQUAD, 0.06, 0, function()
 			if not go.exists(b_id) or not w.alive then return end

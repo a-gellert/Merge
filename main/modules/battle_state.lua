@@ -9,6 +9,7 @@ local poki = require("main.modules.poki")
 local storage = require("main.modules.storage")
 local cards = require("main.modules.cards")
 local projectiles = require("main.modules.projectiles")
+local talents = require("main.modules.talents")
 
 local M = {}
 
@@ -145,18 +146,26 @@ end
 local function apply_stats(sq)
 	local stats = config.get_squad_stats(sq.unit_type, sq.tier)
 	local hp_mult = (sq.team == config.TEAM_ENEMY) and get_pity_mult() or 1
-	sq.max_hp = stats.max_hp * hp_mult
+	local t_mult = 1.0
+	if sq.team == config.TEAM_PLAYER then
+		if sq.unit_type == config.UNIT_MELEE then
+			t_mult = talents.get_melee_multiplier()
+		elseif sq.unit_type == config.UNIT_ARCHER then
+			t_mult = talents.get_archer_multiplier()
+		end
+	end
+	sq.max_hp = stats.max_hp * hp_mult * (sq.unit_type == config.UNIT_MELEE and t_mult or 1.0)
 	sq.hp = sq.max_hp
-	sq.damage = stats.damage
+	sq.damage = stats.damage * t_mult
 	sq.attack_interval = stats.attack_interval
 	sq.attack_range = stats.attack_range
 	sq.speed = stats.speed
 	sq.miss_radius = stats.miss_radius
 	sq.unit_count = stats.unit_count
 	sq.alive_units = stats.unit_count
-	sq.per_unit_damage = stats.damage / math.max(1, stats.unit_count)
+	sq.per_unit_damage = sq.damage / math.max(1, stats.unit_count)
 	sq.sub_units = build_sub_units(sq.team, stats.unit_count, stats.attack_interval)
-	sq.power = config.get_squad_power(sq.unit_type, sq.tier)
+	sq.power = config.get_squad_power(sq.unit_type, sq.tier) * t_mult
 end
 
 local function create_squad_data(team, unit_type, tier, row, col)
@@ -412,12 +421,24 @@ function M.save_game()
 		player_squads = squads_save,
 		cards = cards_save,
 		crates = crates_save,
+		talents = talents.get_save_data(),
 	})
+end
+
+function M.refresh_player_stats()
+	for i = 1, #player_squads do
+		apply_stats(player_squads[i])
+	end
+	M.save_game()
 end
 
 function M.load_game()
 	local data = storage.load()
 	if not data or data.version ~= 2 then return false end
+
+	if data.talents then
+		talents.set_save_data(data.talents)
+	end
 
 	current_level = tonumber(data.level) or 1
 	rounds_since_crate = tonumber(data.rounds_since_crate) or 0
@@ -461,6 +482,10 @@ function M.start_level(level_num, is_retry, is_resume)
 	projectiles.clear()
 	if not is_retry and not is_resume then
 		economy.new_level()
+		local start_bonus = talents.get_starting_coins_bonus()
+		if start_bonus > 0 then
+			economy.add_coins(start_bonus)
+		end
 	end
 	set_phase(config.PHASE_PREP)
 
@@ -848,6 +873,8 @@ function M.apply_damage(squad, amount, hit_x, hit_y)
 		local absorbed = math.min(squad.shield_hp, amount)
 		squad.shield_hp = squad.shield_hp - absorbed
 		amount = amount - absorbed
+		local sh_pos = (hit_x and hit_y) and vmath.vector3(hit_x, hit_y, 0) or vmath.vector3(squad.current_pos)
+		view("play_effect", "shield_hit", sh_pos, { team = squad.team, tier = squad.tier })
 		if squad.shield_hp <= 0 then
 			squad.has_shield = false
 			view("squad_buff", squad, "shield", false)
@@ -865,7 +892,7 @@ function M.apply_damage(squad, amount, hit_x, hit_y)
 	local killed = prev_alive - new_alive
 
 	if squad.team == config.TEAM_ENEMY and killed > 0 and squad.coin_value then
-		local reward = squad.coin_value * killed / squad.unit_count
+		local reward = squad.coin_value * killed / squad.unit_count * talents.get_gold_multiplier()
 		kill_coins_this_battle = kill_coins_this_battle + reward
 		economy.add_coins(reward, vmath.vector3(squad.current_pos))
 	end
@@ -882,9 +909,14 @@ function M.apply_damage(squad, amount, hit_x, hit_y)
 	end
 end
 
-local function on_arrow_hit(target, damage, x, y, is_fire)
+local function on_arrow_hit(target, damage, x, y, is_fire, team)
 	M.apply_damage(target, damage, x, y)
-	view("play_effect", "arrow_hit", vmath.vector3(x, y, 0), { team = target.team, fire = is_fire })
+	view("play_effect", "arrow_hit", vmath.vector3(x, y, 0), {
+		team = team or target.team,
+		target_team = target.team,
+		fire = is_fire,
+		tier = target.tier,
+	})
 end
 
 local function count_alive(list)
@@ -904,7 +936,7 @@ local function finish_battle(win)
 		win = win,
 		level = current_level,
 		kill_coins = kill_coins_this_battle,
-		win_reward = win and M.get_win_reward() or 0,
+		win_reward = win and math.floor(M.get_win_reward() * talents.get_gold_multiplier()) or 0,
 		is_boss = levels.is_boss(current_level),
 	}
 	if win then
@@ -1022,7 +1054,9 @@ function M.update_battle(real_dt)
 										tgt, unit_dmg, squad.miss_radius, squad.has_fire, squad.team)
 									swung = true
 								else
-									M.apply_damage(tgt, unit_dmg)
+									local hx = tgt.current_pos.x + (math.random() - 0.5) * 16
+									local hy = tgt.current_pos.y + (math.random() - 0.5) * 16
+									M.apply_damage(tgt, unit_dmg, hx, hy)
 									swung = true
 								end
 								if not tgt.is_alive then break end

@@ -6,6 +6,8 @@ local economy = require("main.modules.economy")
 local battle_state = require("main.modules.battle_state")
 local tutorial = require("main.modules.tutorial")
 local poki = require("main.modules.poki")
+local sound = require("main.modules.sound")
+local talents = require("main.modules.talents")
 
 local camera = nil
 pcall(function() camera = require("orthographic.camera") end)
@@ -24,6 +26,8 @@ local COLOR_OFF = vmath.vector4(0.36, 0.39, 0.52, 1)
 local COLOR_DOT_OFF = vmath.vector4(0.365, 0.388, 0.518, 1)
 local COLOR_DOT_DONE = vmath.vector4(1.0, 0.81, 0.23, 1)
 local COLOR_SKULL = vmath.vector4(1.0, 0.35, 0.31, 1)
+local COLOR_BTN_BUY = vmath.vector4(0.173, 0.714, 0.490, 1)
+local COLOR_BTN_MAX = vmath.vector4(0.25, 0.28, 0.38, 1)
 
 local SUFFIXES = { { 1e24, "Sp" }, { 1e21, "Sx" }, { 1e18, "Qi" }, { 1e15, "Qa" }, { 1e12, "T" }, { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" } }
 
@@ -183,6 +187,13 @@ local function refresh_hud(self)
 		pulse(N("btn_merge_dot"), can_merge, 1.4)
 	end
 
+	local can_talent = talents.has_affordable(economy.get_coins())
+	gui.set_enabled(N("btn_talents_dot"), can_talent)
+	if can_talent ~= self.can_talent then
+		self.can_talent = can_talent
+		pulse(N("btn_talents_dot"), can_talent, 1.4)
+	end
+
 	local p, e = battle_state.get_player_power(), battle_state.get_enemy_power()
 	gui.set_text(N("txt_power_p"), format_number(p))
 	gui.set_text(N("txt_power_e"), format_number(e))
@@ -329,6 +340,11 @@ end
 local function on_phase_changed(self, phase)
 	local prep = (phase == config.PHASE_PREP)
 	local battle = (phase == config.PHASE_BATTLE)
+	if not prep and self.talents_open then
+		self.talents_open = false
+		gui.set_enabled(N("talents_modal"), false)
+	end
+	gui.set_enabled(N("btn_talents"), prep)
 	set_bottom_visible(self, prep)
 	gui.set_enabled(N("power"), prep)
 	gui.set_enabled(N("battle_bar"), battle)
@@ -379,6 +395,87 @@ local function spawn_flying_coins(self, amount, origin)
 end
 
 -- =============================================================================
+-- TALENTS MODAL
+-- =============================================================================
+local function refresh_talents(self)
+	gui.set_text(N("txt_talents_title"), i18n.get("TALENTS"))
+	gui.set_text(N("txt_talents_coins"), format_number(economy.get_displayed_coins()))
+	local coins = economy.get_coins()
+	local defs = talents.get_defs()
+	for i = 1, #defs do
+		local def = defs[i]
+		local id = def.id
+		local lv = talents.get_level(id)
+		local is_max = talents.is_max(id)
+		local cost = talents.get_cost(id)
+
+		gui.set_text(N("txt_t_title_" .. id), i18n.get(def.name_key))
+		gui.set_text(N("txt_t_lv_" .. id), i18n.get("TALENT_LV", { lv = lv }))
+		gui.set_text(N("txt_t_desc_" .. id), i18n.get(def.desc_key))
+
+		local btn = N("btn_t_buy_" .. id)
+		local icon = N("t_buy_coin_" .. id)
+		local cost_txt = N("txt_t_cost_" .. id)
+		local max_txt = N("txt_t_max_" .. id)
+
+		if is_max then
+			gui.set_enabled(icon, false)
+			gui.set_enabled(cost_txt, false)
+			gui.set_enabled(max_txt, true)
+			gui.set_text(max_txt, i18n.get("MAX"))
+			gui.set_color(btn, COLOR_BTN_MAX)
+		else
+			gui.set_enabled(icon, true)
+			gui.set_enabled(cost_txt, true)
+			gui.set_enabled(max_txt, false)
+			gui.set_text(cost_txt, format_number(cost))
+			local can_afford = coins >= cost
+			gui.set_color(btn, can_afford and COLOR_BTN_BUY or COLOR_OFF)
+		end
+	end
+end
+
+local function on_open_talents(self)
+	if busy() or self.talents_open then return end
+	if battle_state.get_phase() ~= config.PHASE_PREP then return end
+	sound.play("click", 0.65, 1.1)
+	self.talents_open = true
+	gui.set_enabled(N("talents_modal"), true)
+	pop(N("talents_win"), 0.85, 1, 0.25)
+	refresh_talents(self)
+end
+
+local function on_close_talents(self)
+	if not self.talents_open then return end
+	sound.play("click", 0.5, 0.9)
+	self.talents_open = false
+	gui.animate(N("talents_win"), gui.PROP_SCALE, vmath.vector3(0.85 * base_scale(N("talents_win")), 0.85 * base_scale(N("talents_win")), 1), gui.EASING_INBACK, 0.15, 0, function()
+		gui.set_enabled(N("talents_modal"), false)
+	end)
+	self.dirty = true
+end
+
+local function on_buy_talent(self, id)
+	if not self.talents_open or busy() then return end
+	local coins = economy.get_coins()
+	if talents.can_afford(id, coins) then
+		local ok, remaining = talents.upgrade(id, coins)
+		if ok then
+			sound.play("talent", 0.9)
+			economy.set_coins(remaining)
+			battle_state.refresh_player_stats()
+			pop(N("btn_t_buy_" .. id), 1.25, 1, 0.2)
+			pop(N("t_icon_" .. id), 1.3, 1, 0.25)
+			refresh_talents(self)
+			self.dirty = true
+		end
+	else
+		sound.play("click", 0.4, 0.75)
+		pop(N("btn_t_buy_" .. id), 0.9, 1, 0.15)
+	end
+end
+
+-- =============================================================================
 -- BUTTONS
 -- =============================================================================
 local function busy()
@@ -390,8 +487,10 @@ local function on_buy(self, unit_type)
 	if economy.can_afford_buy() then
 		local ok = battle_state.buy_unit(unit_type)
 		if ok then
+			sound.play("click", 0.7, 1.1)
 			pop(N((unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee") .. "_icon"), 1.45, 1, 0.3)
 		else
+			sound.play("click", 0.4, 0.7)
 			pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
 		end
 	elseif can_offer_free_ad(self) and self.ad_seen and not self.ad_locked then
@@ -404,6 +503,7 @@ local function on_buy(self, unit_type)
 			self.dirty = true
 		end)
 	else
+		sound.play("click", 0.4, 0.7)
 		pop(N(unit_type == config.UNIT_ARCHER and "btn_archer" or "btn_melee"), 0.9, 1, 0.2)
 	end
 	self.dirty = true
@@ -420,6 +520,8 @@ function init(self)
 	self.active_coins = 0
 	self.helper = N("coin_fly")
 	self.forces_ratio = 0.5
+	self.talents_open = false
+	self.can_talent = false
 	self.dirty = true
 
 	self.druid:new_button("btn_melee", function() on_buy(self, config.UNIT_MELEE) end)
@@ -428,8 +530,10 @@ function init(self)
 	self.druid:new_button("btn_merge", function()
 		if busy() then return end
 		if battle_state.auto_merge() then
+			sound.play("click", 0.75, 1.15)
 			pop(N("btn_merge"), 1.2, 1, 0.25)
 		else
+			sound.play("click", 0.4, 0.7)
 			pop(N("btn_merge"), 0.85, 1, 0.2)
 		end
 		self.dirty = true
@@ -437,10 +541,24 @@ function init(self)
 
 	self.druid:new_button("btn_fight", function()
 		if busy() then return end
-		if not battle_state.start_battle() then
+		if battle_state.start_battle() then
+			sound.play("click", 0.85, 1.0)
+		else
+			sound.play("click", 0.4, 0.7)
 			pop(N("btn_fight"), 0.85, 1, 0.2)
 		end
 	end)
+
+	self.druid:new_button("btn_talents", function() on_open_talents(self) end)
+	self.druid:new_button("btn_talents_close", function() on_close_talents(self) end)
+	self.druid:new_button("talents_dim", function() on_close_talents(self) end)
+	self.druid:new_button("talents_win", function() end)
+
+	local defs = talents.get_defs()
+	for i = 1, #defs do
+		local id = defs[i].id
+		self.druid:new_button("btn_t_buy_" .. id, function() on_buy_talent(self, id) end)
+	end
 
 	economy.on_earn(function(amount, origin)
 		self.pending_coins = self.pending_coins or {}
@@ -454,6 +572,7 @@ function init(self)
 
 	gui.set_enabled(N("toast"), false)
 	gui.set_enabled(N("banner"), false)
+	gui.set_enabled(N("talents_modal"), false)
 	stop_hand(self)
 	self.last_phase = nil
 	self.last_level = nil
@@ -492,9 +611,15 @@ function update(self, dt)
 	if self.dirty and phase == config.PHASE_PREP then
 		self.dirty = false
 		refresh_hud(self)
+		if self.talents_open then
+			refresh_talents(self)
+		end
 	elseif self.dirty then
 		self.dirty = false
 		gui.set_text(N("txt_coins"), format_number(economy.get_displayed_coins()))
+		if self.talents_open then
+			refresh_talents(self)
+		end
 	end
 
 	if self.tutorial_dirty then
@@ -542,6 +667,10 @@ end
 function on_input(self, action_id, action)
 	if action_id == hash("touch") and action.pressed then
 		poki.on_player_input()
+	end
+	if self.talents_open then
+		self.druid:on_input(action_id, action)
+		return true
 	end
 	return self.druid:on_input(action_id, action)
 end

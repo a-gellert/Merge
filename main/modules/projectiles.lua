@@ -72,7 +72,7 @@ function M.spawn(from_x, from_y, target, damage, miss_radius, is_fire, team)
 	return true
 end
 
--- on_hit(target, damage, x, y, is_fire) is called when an arrow lands on its squad
+-- on_hit(target, damage, x, y, is_fire, team) is called when an arrow lands on its squad
 function M.update(dt, on_hit)
 	for i = 1, #pool do
 		local p = pool[i]
@@ -87,7 +87,7 @@ function M.update(dt, on_hit)
 					local hy = p.ty - tgt.current_pos.y
 					local hit_r = math.max(config.PROJECTILE_HIT_RADIUS, 4.0 * math.sqrt(tgt.unit_count or 1) + 16)
 					if hx * hx + hy * hy <= hit_r * hit_r then
-						on_hit(tgt, p.damage, p.tx, p.ty, p.is_fire)
+						on_hit(tgt, p.damage, p.tx, p.ty, p.is_fire, p.team)
 					end
 				end
 			else

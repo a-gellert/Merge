@@ -32,4 +32,8 @@ instances {
     z: 0.6
   }
 }
+instances {
+  id: "sound_manager"
+  prototype: "/main/entities/sound_manager/sound_manager.go"
+}
 scale_along_z: 0

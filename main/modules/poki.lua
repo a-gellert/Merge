@@ -1,5 +1,7 @@
 -- Poki SDK wrapper: gameplay events, interstitials (commercial breaks),
 -- rewarded ads with cooldowns, and analytics. Works as a no-op outside Poki.
+local sound = require("main.modules.sound")
+
 local M = {}
 
 local is_gameplay_active = false
@@ -63,6 +65,7 @@ function M.commercial_break(on_complete)
 		return
 	end
 	M.gameplay_stop()
+	sound.on_ad_start()
 	is_ad_active = true
 	local done = false
 	s.commercial_break(function(_, status)
@@ -71,6 +74,7 @@ function M.commercial_break(on_complete)
 		elseif not done then
 			done = true
 			is_ad_active = false
+			sound.on_ad_stop()
 			if on_complete then on_complete() end
 		end
 	end)
@@ -84,6 +88,7 @@ function M.rewarded_break(size, on_reward)
 		return
 	end
 	M.gameplay_stop()
+	sound.on_ad_start()
 	is_ad_active = true
 	local done = false
 	s.rewarded_break(size or "small", function(_, status)
@@ -92,6 +97,7 @@ function M.rewarded_break(size, on_reward)
 		elseif not done then
 			done = true
 			is_ad_active = false
+			sound.on_ad_stop()
 			if on_reward then on_reward(status == s.REWARDED_BREAK_SUCCESS) end
 		end
 	end)
